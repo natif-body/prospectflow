@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+    
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+    
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+    
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function isValidString(field, minLen, maxLen) {
+      return request.resource.data[field] is string && 
+             request.resource.data[field].size() >= minLen && 
+             request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+    
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    
+    function isValidClient(data) {
+      return hasRequiredFields(['firstName', 'createdAt', 'isActive', 'uid']) &&
+             isValidString('firstName', 1, 100) &&
+             isValidOptionalString('lastName', 0, 100) &&
+             isValidOptionalString('email', 0, 150) &&
+             isValidOptionalString('phone', 0, 50) &&
+             isValidOptionalString('birthDate', 0, 50) &&
+             isValidOptionalString('address', 0, 250) &&
+             isValidString('createdAt', 1, 50) &&
+             isValidOptionalString('signedAt', 0, 50) &&
+             isValidOptionalString('deactivatedAt', 0, 50) &&
+             (!( 'formulaId' in data ) || data.formulaId is string || data.formulaId is number) &&
+             data.isActive is bool &&
+             data.uid == request.auth.uid;
+    }
+    
+    function isValidFormula(data) {
+      return hasRequiredFields(['name', 'price', 'period', 'uid']) &&
+             isValidString('name', 1, 100) &&
+             data.price is number && data.price >= 0 &&
+             data.period in ['week', 'month', 'year'] &&
+             data.uid == request.auth.uid;
+    }
+    
+    function isValidRelance(data) {
+      return hasRequiredFields(['name', 'dueDate', 'createdAt', 'status', 'uid']) &&
+             isValidString('name', 1, 100) &&
+             isValidOptionalString('phone', 0, 50) &&
+             isValidOptionalString('email', 0, 150) &&
+             isValidOptionalString('notes', 0, 1000) &&
+             isValidString('dueDate', 1, 50) &&
+             isValidString('createdAt', 1, 50) &&
+             data.status in ['PENDING', 'COMPLETED', 'CANCELLED'] &&
+             data.uid == request.auth.uid;
+    }
+    
+    function isValidManualStats(data) {
+      return hasRequiredFields(['period_start', 'period_type', 'totalContacts', 'uid']) &&
+             isValidString('period_start', 1, 50) &&
+             data.period_type in ['day', 'week', 'month'] &&
+             data.totalContacts is number && data.totalContacts >= 0 &&
+             (!( 'appointmentsTaken' in data ) || (data.appointmentsTaken is number && data.appointmentsTaken >= 0)) &&
+             (!( 'appointmentsProspect' in data ) || (data.appointmentsProspect is number && data.appointmentsProspect >= 0)) &&
+             (!( 'appointmentsSetter' in data ) || (data.appointmentsSetter is number && data.appointmentsSetter >= 0)) &&
+             (!( 'showedUp' in data ) || (data.showedUp is number && data.showedUp >= 0)) &&
+             (!( 'noShow' in data ) || (data.noShow is number && data.noShow >= 0)) &&
+             (!( 'cancelled' in data ) || (data.cancelled is number && data.cancelled >= 0)) &&
+             (!( 'signed' in data ) || (data.signed is number && data.signed >= 0)) &&
+             (!( 'notSigned' in data ) || (data.notSigned is number && data.notSigned >= 0)) &&
+             (!( 'totalCalls' in data ) || (data.totalCalls is number && data.totalCalls >= 0)) &&
+             (!( 'totalPickups' in data ) || (data.totalPickups is number && data.totalPickups >= 0)) &&
+             (!( 'contactsDigital' in data ) || (data.contactsDigital is number && data.contactsDigital >= 0)) &&
+             (!( 'contactsNonDigital' in data ) || (data.contactsNonDigital is number && data.contactsNonDigital >= 0)) &&
+             isValidOptionalString('notes', 0, 1000) &&
+             data.uid == request.auth.uid;
+    }
+
+    function isValidDailyLog(data) {
+      return hasRequiredFields(['date', 'uid']) &&
+             isValidString('date', 1, 50) &&
+             (!( 'appointments' in data ) || (data.appointments is number && data.appointments >= 0)) &&
+             (!( 'signed' in data ) || (data.signed is number && data.signed >= 0)) &&
+             (!( 'notSigned' in data ) || (data.notSigned is number && data.notSigned >= 0)) &&
+             (!( 'pending' in data ) || (data.pending is number && data.pending >= 0)) &&
+             (!( 'noShow' in data ) || (data.noShow is number && data.noShow >= 0)) &&
+             (!( 'digital' in data ) || (data.digital is number && data.digital >= 0)) &&
+             (!( 'nonDigital' in data ) || (data.nonDigital is number && data.nonDigital >= 0)) &&
+             (!( 'showedUp' in data ) || (data.showedUp is number && data.showedUp >= 0)) &&
+             data.uid == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    
+    match /clients/{clientId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidClient(request.resource.data) && uidUnchanged();
+      allow update: if isDocOwner() && isValidClient(request.resource.data) && uidNotModified();
+      allow delete: if isDocOwner();
+    }
+    
+    match /formulas/{formulaId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidFormula(request.resource.data) && uidUnchanged();
+      allow update: if isDocOwner() && isValidFormula(request.resource.data) && uidNotModified();
+      allow delete: if isDocOwner();
+    }
+    
+    match /relances/{relanceId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidRelance(request.resource.data) && uidUnchanged();
+      allow update: if isDocOwner() && isValidRelance(request.resource.data) && uidNotModified();
+      allow delete: if isDocOwner();
+    }
+    
+    match /manualStats/{statId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidManualStats(request.resource.data) && uidUnchanged();
+      allow update: if isDocOwner() && isValidManualStats(request.resource.data) && uidNotModified();
+      allow delete: if isDocOwner();
+    }
+
+    match /dailyLogs/{logId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidDailyLog(request.resource.data) && uidUnchanged();
+      allow update: if isDocOwner() && isValidDailyLog(request.resource.data) && uidNotModified();
+      allow delete: if isDocOwner();
+    }
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "entities": {
+    "Client": {
+      "title": "Client",
+      "description": "A client or member",
+      "type": "object",
+      "properties": {
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "birthDate": { "type": "string" },
+        "address": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "signedAt": { "type": "string" },
+        "formulaId": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "deactivatedAt": { "type": "string" },
+        "uid": { "type": "string", "description": "The user ID of the owner" }
+      },
+      "required": ["firstName", "createdAt", "isActive", "uid"]
+    },
+    "Formula": {
+      "title": "Formula",
+      "description": "A subscription formula",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "period": { "type": "string", "enum": ["week", "month", "year"] },
+        "uid": { "type": "string", "description": "The user ID of the owner" }
+      },
+      "required": ["name", "price", "period", "uid"]
+    },
+    "Relance": {
+      "title": "Relance",
+      "description": "A follow-up reminder",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "notes": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "COMPLETED", "CANCELLED"] },
+        "uid": { "type": "string", "description": "The user ID of the owner" }
+      },
+      "required": ["name", "dueDate", "createdAt", "status", "uid"]
+    },
+    "ManualStats": {
+      "title": "ManualStats",
+      "description": "Manual statistics entry",
+      "type": "object",
+      "properties": {
+        "period_start": { "type": "string" },
+        "period_type": { "type": "string", "enum": ["day", "week", "month"] },
+        "totalContacts": { "type": "number" },
+        "appointmentsTaken": { "type": "number" },
+        "appointmentsProspect": { "type": "number" },
+        "appointmentsSetter": { "type": "number" },
+        "showedUp": { "type": "number" },
+        "noShow": { "type": "number" },
+        "cancelled": { "type": "number" },
+        "signed": { "type": "number" },
+        "notSigned": { "type": "number" },
+        "totalCalls": { "type": "number" },
+        "totalPickups": { "type": "number" },
+        "contactsDigital": { "type": "number" },
+        "contactsNonDigital": { "type": "number" },
+        "notes": { "type": "string" },
+        "uid": { "type": "string", "description": "The user ID of the owner" }
+      },
+      "required": ["period_start", "period_type", "totalContacts", "uid"]
+    },
+    "DailyLog": {
+      "title": "DailyLog",
+      "description": "Daily log entry",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "appointments": { "type": "number" },
+        "signed": { "type": "number" },
+        "notSigned": { "type": "number" },
+        "pending": { "type": "number" },
+        "noShow": { "type": "number" },
+        "digital": { "type": "number" },
+        "nonDigital": { "type": "number" },
+        "showedUp": { "type": "number" },
+        "uid": { "type": "string", "description": "The user ID of the owner" }
+      },
+      "required": ["date", "uid"]
+    }
+  },
+  "firestore": {
+    "/clients/{clientId}": {
+      "schema": { "$ref": "#/entities/Client" },
+      "description": "Clients collection"
+    },
+    "/formulas/{formulaId}": {
+      "schema": { "$ref": "#/entities/Formula" },
+      "description": "Formulas collection"
+    },
+    "/relances/{relanceId}": {
+      "schema": { "$ref": "#/entities/Relance" },
+      "description": "Relances collection"
+    },
+    "/manualStats/{statId}": {
+      "schema": { "$ref": "#/entities/ManualStats" },
+      "description": "Manual stats collection"
+    },
+    "/dailyLogs/{logId}": {
+      "schema": { "$ref": "#/entities/DailyLog" },
+      "description": "Daily logs collection"
+    }
+  }
+}
