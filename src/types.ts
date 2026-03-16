@@ -76,8 +76,10 @@ export interface DashboardStats {
     notSigned: number;
   };
   churnRate: number;
-  totalRevenue: number;
-  averageBasket: number;
+  totalRevenueTTC: number;
+  totalRevenueHT: number;
+  averageBasketTTC: number;
+  averageBasketHT: number;
   showUpRate: number;
   closingRate: number;
   appointmentRate: number;

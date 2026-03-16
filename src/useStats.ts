@@ -69,7 +69,8 @@ export function useStats(
     const churnRate = totalSigned > 0 ? (totalCancelled / totalSigned) * 100 : 0;
 
     // Average basket and total revenue
-    let totalRevenue = 0;
+    let totalRevenueTTC = 0;
+    let totalRevenueHT = 0;
     let signedCount = 0;
 
     clients.forEach(c => {
@@ -77,19 +78,25 @@ export function useStats(
         const formula = formulas.find(f => f.id.toString() === c.formulaId?.toString());
         if (formula) {
           if (!startDate || !endDate || (c.createdAt >= startDate && c.createdAt <= endDate)) {
-            let price = formula.price;
-            // Apply Alma commission for annual formulas if specified
+            let priceTTC = formula.price;
+            let priceHT = formula.price / 1.2;
+            
+            // Apply Alma commission for annual formulas if specified (commission is calculated on HT price)
             if (formula.period === 'year' && formula.almaCommission) {
-              price = price * (1 - formula.almaCommission / 100);
+              const commissionAmount = priceHT * (formula.almaCommission / 100);
+              priceTTC = priceTTC - commissionAmount;
+              priceHT = priceHT - commissionAmount;
             }
-            totalRevenue += price;
+            totalRevenueTTC += priceTTC;
+            totalRevenueHT += priceHT;
             signedCount++;
           }
         }
       }
     });
 
-    const averageBasket = signedCount > 0 ? totalRevenue / signedCount : 0;
+    const averageBasketTTC = signedCount > 0 ? totalRevenueTTC / signedCount : 0;
+    const averageBasketHT = signedCount > 0 ? totalRevenueHT / signedCount : 0;
 
     const totalAppointments = manualStatsSum.showedUp + manualStatsSum.noShow + manualStatsSum.cancelled;
     const showUpRate = totalAppointments > 0 ? (manualStatsSum.showedUp / totalAppointments) * 100 : 0;
@@ -123,8 +130,10 @@ export function useStats(
         notSigned: manualStatsSum.notSigned
       },
       churnRate,
-      totalRevenue,
-      averageBasket,
+      totalRevenueTTC,
+      totalRevenueHT,
+      averageBasketTTC,
+      averageBasketHT,
       showUpRate,
       closingRate,
       appointmentRate,

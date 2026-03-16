@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Users, 
   Calendar, 
@@ -92,6 +92,13 @@ export default function App() {
 
   const formatPrice = (priceTTC: number) => {
     const priceHT = priceTTC / 1.2;
+    return {
+      ttc: `${priceTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ TTC`,
+      ht: `${priceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ HT`
+    };
+  };
+
+  const formatExactPrice = (priceHT: number, priceTTC: number) => {
     return {
       ttc: `${priceTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ TTC`,
       ht: `${priceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ HT`
@@ -228,6 +235,7 @@ export default function App() {
   // Formulas
   const [isFormulaModalOpen, setIsFormulaModalOpen] = useState(false);
   const [formulaToEdit, setFormulaToEdit] = useState<Formula | null>(null);
+  const [formulaSort, setFormulaSort] = useState<'name' | 'price-asc' | 'price-desc' | 'period'>('name');
   const [newFormula, setNewFormula] = useState<{ name: string; price: number; period: 'week' | 'month' | 'year'; almaCommission?: number }>({ 
     name: '', 
     price: 0, 
@@ -809,6 +817,24 @@ export default function App() {
     window.open(`https://wa.me/${cleanNumber}?text=${text}`, '_blank');
   };
 
+  const sortedFormulas = useMemo(() => {
+    return [...formulas].sort((a, b) => {
+      switch (formulaSort) {
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'price-asc':
+          return a.price - b.price;
+        case 'price-desc':
+          return b.price - a.price;
+        case 'period':
+          const periodOrder = { week: 1, month: 2, year: 3 };
+          return periodOrder[a.period] - periodOrder[b.period];
+        default:
+          return 0;
+      }
+    });
+  }, [formulas, formulaSort]);
+
   const filteredClients = clients.filter(p => {
     const matchesSearch = `${p.firstName} ${p.lastName || ''}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1219,8 +1245,8 @@ export default function App() {
                 />
                 <StatCard 
                   title="Chiffre d'Affaires" 
-                  value={formatPrice(stats.totalRevenue).ht} 
-                  subValue={formatPrice(stats.totalRevenue).ttc}
+                  value={formatExactPrice(stats.totalRevenueHT, stats.totalRevenueTTC).ht} 
+                  subValue={formatExactPrice(stats.totalRevenueHT, stats.totalRevenueTTC).ttc}
                   icon={TrendingUp} 
                   color="bg-indigo-600 text-white"
                 />
@@ -1258,8 +1284,14 @@ export default function App() {
                 >
                   <StatCard 
                     title={`Panier Moyen (${basketPeriod === 'week' ? 'Sem' : basketPeriod === 'month' ? 'Mois' : 'An'})`} 
-                    value={formatPrice(stats.averageBasket * (basketPeriod === 'week' ? 12/52 : basketPeriod === 'year' ? 12 : 1)).ht} 
-                    subValue={formatPrice(stats.averageBasket * (basketPeriod === 'week' ? 12/52 : basketPeriod === 'year' ? 12 : 1)).ttc}
+                    value={formatExactPrice(
+                      stats.averageBasketHT * (basketPeriod === 'week' ? 12/52 : basketPeriod === 'year' ? 12 : 1),
+                      stats.averageBasketTTC * (basketPeriod === 'week' ? 12/52 : basketPeriod === 'year' ? 12 : 1)
+                    ).ht} 
+                    subValue={formatExactPrice(
+                      stats.averageBasketHT * (basketPeriod === 'week' ? 12/52 : basketPeriod === 'year' ? 12 : 1),
+                      stats.averageBasketTTC * (basketPeriod === 'week' ? 12/52 : basketPeriod === 'year' ? 12 : 1)
+                    ).ttc}
                     icon={TrendingUp} 
                     color="bg-amber-50 text-amber-600"
                   />
@@ -1765,22 +1797,34 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
                 <div className="space-y-8">
                   <div className="glass-card p-4 md:p-6">
-                    <div className="flex justify-between items-center mb-6">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                       <h3 className="font-bold text-lg text-slate-800">Gestion des Formules</h3>
-                      <button 
-                        onClick={() => {
-                          setFormulaToEdit(null);
-                          setNewFormula({ name: '', price: 0, period: 'month' });
-                          setIsFormulaModalOpen(true);
-                        }}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-sm shadow-indigo-200"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Ajouter une formule
-                      </button>
+                      <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <select
+                          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-600"
+                          value={formulaSort}
+                          onChange={(e) => setFormulaSort(e.target.value as any)}
+                        >
+                          <option value="name">Trier par nom</option>
+                          <option value="price-asc">Prix croissant</option>
+                          <option value="price-desc">Prix décroissant</option>
+                          <option value="period">Périodicité</option>
+                        </select>
+                        <button 
+                          onClick={() => {
+                            setFormulaToEdit(null);
+                            setNewFormula({ name: '', price: 0, period: 'month' });
+                            setIsFormulaModalOpen(true);
+                          }}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-sm shadow-indigo-200 whitespace-nowrap"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Ajouter une formule
+                        </button>
+                      </div>
                     </div>
                     <div className="grid grid-cols-1 gap-4">
-                      {formulas.map((f) => (
+                      {sortedFormulas.map((f) => (
                         <div key={f.id} className="p-4 border border-slate-200 rounded-2xl bg-slate-50/50 flex flex-col gap-4">
                           <div className="flex justify-between items-start">
                             <div>
@@ -2417,7 +2461,7 @@ export default function App() {
                     </p>
                     {newFormula.period === 'year' && newFormula.almaCommission && (
                       <p className="text-[10px] text-indigo-600 font-bold">
-                        Net après commission ({newFormula.almaCommission}%) : {(newFormula.price * (1 - newFormula.almaCommission / 100)).toFixed(2)}€
+                        Net après commission ({newFormula.almaCommission}% sur HT) : {(newFormula.price - ((newFormula.price / 1.2) * (newFormula.almaCommission / 100))).toFixed(2)}€ TTC (HT : {((newFormula.price / 1.2) - ((newFormula.price / 1.2) * (newFormula.almaCommission / 100))).toFixed(2)}€)
                       </p>
                     )}
                   </div>
