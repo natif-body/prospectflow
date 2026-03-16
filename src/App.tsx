@@ -887,25 +887,28 @@ export default function App() {
     );
   }
 
+  // L'authentification est désormais automatique (anonyme)
+  // Si l'utilisateur n'est pas trouvé, c'est probablement que l'authentification anonyme n'est pas activée
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center space-y-6">
-          <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-indigo-200">
-            <TrendingUp className="w-10 h-10 text-white" />
+          <div className="w-20 h-20 bg-rose-100 rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-rose-200">
+            <X className="w-10 h-10 text-rose-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">ProspectFlow</h1>
-            <p className="text-slate-500 mt-2">Gérez vos prospects et membres en toute simplicité</p>
+            <h1 className="text-2xl font-bold text-slate-900">Authentification requise</h1>
+            <p className="text-slate-500 mt-2">
+              Pour utiliser l'application sans écran de connexion, vous devez activer l'authentification <strong>Anonyme</strong> dans votre console Firebase.
+            </p>
           </div>
           <button 
             onClick={login}
             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-3"
           >
             <ArrowUpRight className="w-5 h-5" />
-            Se connecter avec Google
+            Se connecter avec Google en attendant
           </button>
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Sécurisé par Firebase Auth</p>
         </div>
       </div>
     );

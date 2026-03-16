@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, setDoc, addDoc, updateDoc, deleteDoc, query, where, getDocs, getDocFromServer } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { Client, Formula, Relance, ManualStats, DailyLog, DashboardStats } from './types';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, signInAnonymously } from 'firebase/auth';
 
 export enum OperationType {
   CREATE = 'create',
@@ -55,10 +55,10 @@ export function useFirebase() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setIsAuthReady(true);
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
+        setUser(u);
+        setIsAuthReady(true);
         // Test connection
         getDocFromServer(doc(db, 'test', 'connection')).catch(error => {
           if(error instanceof Error && error.message.includes('the client is offline')) {
@@ -66,7 +66,15 @@ export function useFirebase() {
           }
         });
       } else {
-        setLoading(false);
+        try {
+          // Si aucun utilisateur n'est connecté, on tente une connexion anonyme
+          // Cela nécessite d'activer l'authentification "Anonyme" dans la console Firebase
+          await signInAnonymously(auth);
+        } catch (error) {
+          console.error("Erreur de connexion anonyme:", error);
+          setLoading(false);
+          setIsAuthReady(true);
+        }
       }
     });
     return () => unsubscribe();
