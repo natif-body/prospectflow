@@ -46,6 +46,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 export function useFirebase() {
   const [user, setUser] = useState(auth.currentUser);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   
   const [clients, setClients] = useState<Client[]>([]);
   const [formulas, setFormulas] = useState<Formula[]>([]);
@@ -59,6 +60,7 @@ export function useFirebase() {
       if (u) {
         setUser(u);
         setIsAuthReady(true);
+        setAuthError(null);
         // Test connection
         getDocFromServer(doc(db, 'test', 'connection')).catch(error => {
           if(error instanceof Error && error.message.includes('the client is offline')) {
@@ -70,8 +72,9 @@ export function useFirebase() {
           // Si aucun utilisateur n'est connecté, on tente une connexion anonyme
           // Cela nécessite d'activer l'authentification "Anonyme" dans la console Firebase
           await signInAnonymously(auth);
-        } catch (error) {
+        } catch (error: any) {
           console.error("Erreur de connexion anonyme:", error);
+          setAuthError(error.message || "Erreur inconnue");
           setLoading(false);
           setIsAuthReady(true);
         }
@@ -122,6 +125,7 @@ export function useFirebase() {
   return {
     user,
     isAuthReady,
+    authError,
     loading,
     clients,
     formulas,

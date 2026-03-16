@@ -191,7 +191,7 @@ export default function App() {
     return weeks;
   };
 
-  const { user, isAuthReady, loading, clients, formulas, relances, manualStats, dailyLogs, login, logout } = useFirebase();
+  const { user, isAuthReady, authError, loading, clients, formulas, relances, manualStats, dailyLogs, login, logout } = useFirebase();
   
   // Date Range
   const [dateRange, setDateRange] = useState({
@@ -901,13 +901,29 @@ export default function App() {
             <p className="text-slate-500 mt-2">
               Pour utiliser l'application sans écran de connexion, vous devez activer l'authentification <strong>Anonyme</strong> dans votre console Firebase.
             </p>
+            {authError && (
+              <div className="mt-4 p-3 bg-rose-50 border border-rose-100 rounded-xl text-xs text-rose-600 text-left font-mono break-words">
+                <strong>Erreur technique :</strong> {authError}
+              </div>
+            )}
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-2xl font-bold transition-all"
+          >
+            J'ai activé l'option, réessayer
+          </button>
+          <div className="relative flex items-center py-2">
+            <div className="flex-grow border-t border-slate-200"></div>
+            <span className="flex-shrink-0 mx-4 text-slate-400 text-xs uppercase tracking-wider font-bold">Ou</span>
+            <div className="flex-grow border-t border-slate-200"></div>
           </div>
           <button 
             onClick={login}
             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-3"
           >
             <ArrowUpRight className="w-5 h-5" />
-            Se connecter avec Google en attendant
+            Se connecter avec Google
           </button>
         </div>
       </div>
