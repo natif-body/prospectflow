@@ -302,17 +302,16 @@ export default function App() {
   };
 
   const seedDefaultFormulas = async () => {
-    if (!user) return;
     const defaults = [
-      { name: 'Hebdomadaire Basique', price: 30, period: 'week', uid: user.uid },
-      { name: 'Hebdomadaire Classique', price: 50, period: 'week', uid: user.uid },
-      { name: 'Hebdomadaire Premium', price: 80, period: 'week', uid: user.uid },
-      { name: 'Mensuel Basique', price: 100, period: 'month', uid: user.uid },
-      { name: 'Mensuel Classique', price: 150, period: 'month', uid: user.uid },
-      { name: 'Mensuel Premium', price: 250, period: 'month', uid: user.uid },
-      { name: 'Annuel Basique', price: 1000, period: 'year', uid: user.uid },
-      { name: 'Annuel Classique', price: 1500, period: 'year', uid: user.uid },
-      { name: 'Annuel Premium', price: 2500, period: 'year', uid: user.uid }
+      { name: 'Hebdomadaire Basique', price: 30, period: 'week', uid: 'admin_user' },
+      { name: 'Hebdomadaire Classique', price: 50, period: 'week', uid: 'admin_user' },
+      { name: 'Hebdomadaire Premium', price: 80, period: 'week', uid: 'admin_user' },
+      { name: 'Mensuel Basique', price: 100, period: 'month', uid: 'admin_user' },
+      { name: 'Mensuel Classique', price: 150, period: 'month', uid: 'admin_user' },
+      { name: 'Mensuel Premium', price: 250, period: 'month', uid: 'admin_user' },
+      { name: 'Annuel Basique', price: 1000, period: 'year', uid: 'admin_user' },
+      { name: 'Annuel Classique', price: 1500, period: 'year', uid: 'admin_user' },
+      { name: 'Annuel Premium', price: 2500, period: 'year', uid: 'admin_user' }
     ];
     
     try {
@@ -341,7 +340,7 @@ export default function App() {
       } else {
         await addDoc(collection(db, 'dailyLogs'), {
           ...editingDailyLog,
-          uid: user.uid
+          uid: 'admin_user'
         });
       }
       setIsDailyLogModalOpen(false);
@@ -373,7 +372,7 @@ export default function App() {
         dueDate: dayBefore.toISOString(),
         status: 'PENDING',
         createdAt: new Date().toISOString(),
-        uid: user.uid
+        uid: 'admin_user'
       });
 
       // Create Jour J reminder
@@ -383,7 +382,7 @@ export default function App() {
         dueDate: targetDate.toISOString(),
         status: 'PENDING',
         createdAt: new Date().toISOString(),
-        uid: user.uid
+        uid: 'admin_user'
       });
 
       setIsRelanceModalOpen(false);
@@ -544,7 +543,7 @@ export default function App() {
         ...newClient,
         createdAt: new Date(newClient.createdAt).toISOString(),
         isActive: true,
-        uid: user.uid
+        uid: 'admin_user'
       });
       setIsClientModalOpen(false);
       setNewClient({ 
@@ -564,7 +563,7 @@ export default function App() {
 
   const handleEditClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clientToEdit || !user) return;
+    if (!clientToEdit) return;
     
     const updates = { ...clientToEdit };
     delete (updates as any).id;
@@ -598,7 +597,7 @@ export default function App() {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file) return;
 
     setIsImporting(true);
     Papa.parse(file, {
@@ -626,7 +625,7 @@ export default function App() {
               email: safeString(emailKey ? row[emailKey] : '', 150),
               createdAt: safeString(createdAtKey && row[createdAtKey] ? row[createdAtKey] : new Date().toISOString(), 50),
               isActive: true,
-              uid: user.uid
+              uid: 'admin_user'
             };
           }).filter(p => p.firstName !== 'Inconnu' || p.lastName !== '' || p.email !== '');
 
@@ -658,7 +657,7 @@ export default function App() {
 
   const handleClientFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file) return;
 
     setIsImporting(true);
     Papa.parse(file, {
@@ -718,7 +717,7 @@ export default function App() {
               address: safeString(addressKey ? row[addressKey] : '', 250),
               createdAt: safeString(createdAtKey && row[createdAtKey] ? row[createdAtKey] : new Date().toISOString(), 50),
               isActive,
-              uid: user.uid
+              uid: 'admin_user'
             };
           }).filter(c => c.firstName !== 'Inconnu' || c.lastName !== '' || c.email !== '' || c.phone !== '');
 
@@ -757,7 +756,7 @@ export default function App() {
 
   const handleSetterImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file) return;
 
     setIsImportingSetter(true);
     Papa.parse(file, {
@@ -782,7 +781,7 @@ export default function App() {
                 totalContacts: 0, // Required field
                 totalCalls: calls,
                 totalPickups: pickups,
-                uid: user.uid
+                uid: 'admin_user'
               });
             }
           }
@@ -2421,7 +2420,7 @@ export default function App() {
                   } else {
                     await addDoc(collection(db, 'formulas'), {
                       ...newFormula,
-                      uid: user.uid
+                      uid: 'admin_user'
                     });
                   }
                   setIsFormulaModalOpen(false);
@@ -2537,7 +2536,7 @@ export default function App() {
                   } else {
                     await addDoc(collection(db, 'manualStats'), {
                       ...editingManualStats,
-                      uid: user.uid
+                      uid: 'admin_user'
                     });
                   }
                   setIsManualStatsModalOpen(false);
