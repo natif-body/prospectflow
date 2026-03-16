@@ -304,15 +304,15 @@ export default function App() {
   const seedDefaultFormulas = async () => {
     if (!user) return;
     const defaults = [
-      { name: 'Hebdomadaire Basique', price: 30, period: 'week', uid: 'admin_user' },
-      { name: 'Hebdomadaire Classique', price: 50, period: 'week', uid: 'admin_user' },
-      { name: 'Hebdomadaire Premium', price: 80, period: 'week', uid: 'admin_user' },
-      { name: 'Mensuel Basique', price: 100, period: 'month', uid: 'admin_user' },
-      { name: 'Mensuel Classique', price: 150, period: 'month', uid: 'admin_user' },
-      { name: 'Mensuel Premium', price: 250, period: 'month', uid: 'admin_user' },
-      { name: 'Annuel Basique', price: 1000, period: 'year', uid: 'admin_user' },
-      { name: 'Annuel Classique', price: 1500, period: 'year', uid: 'admin_user' },
-      { name: 'Annuel Premium', price: 2500, period: 'year', uid: 'admin_user' }
+      { name: 'Hebdomadaire Basique', price: 30, period: 'week', uid: user.uid },
+      { name: 'Hebdomadaire Classique', price: 50, period: 'week', uid: user.uid },
+      { name: 'Hebdomadaire Premium', price: 80, period: 'week', uid: user.uid },
+      { name: 'Mensuel Basique', price: 100, period: 'month', uid: user.uid },
+      { name: 'Mensuel Classique', price: 150, period: 'month', uid: user.uid },
+      { name: 'Mensuel Premium', price: 250, period: 'month', uid: user.uid },
+      { name: 'Annuel Basique', price: 1000, period: 'year', uid: user.uid },
+      { name: 'Annuel Classique', price: 1500, period: 'year', uid: user.uid },
+      { name: 'Annuel Premium', price: 2500, period: 'year', uid: user.uid }
     ];
     
     try {
@@ -341,7 +341,7 @@ export default function App() {
       } else {
         await addDoc(collection(db, 'dailyLogs'), {
           ...editingDailyLog,
-          uid: 'admin_user'
+          uid: user.uid
         });
       }
       setIsDailyLogModalOpen(false);
@@ -373,7 +373,7 @@ export default function App() {
         dueDate: dayBefore.toISOString(),
         status: 'PENDING',
         createdAt: new Date().toISOString(),
-        uid: 'admin_user'
+        uid: user.uid
       });
 
       // Create Jour J reminder
@@ -383,7 +383,7 @@ export default function App() {
         dueDate: targetDate.toISOString(),
         status: 'PENDING',
         createdAt: new Date().toISOString(),
-        uid: 'admin_user'
+        uid: user.uid
       });
 
       setIsRelanceModalOpen(false);
@@ -544,7 +544,7 @@ export default function App() {
         ...newClient,
         createdAt: new Date(newClient.createdAt).toISOString(),
         isActive: true,
-        uid: 'admin_user'
+        uid: user.uid
       });
       setIsClientModalOpen(false);
       setNewClient({ 
@@ -610,18 +610,25 @@ export default function App() {
           const findKey = (patterns: string[]) => keys.find(k => patterns.some(p => k.toLowerCase().includes(p.toLowerCase())));
 
           const prospectsToImport = results.data.map((row: any) => {
-            const fName = row[findKey(['firstName', 'prenom', 'prénom', 'Firstname']) || ''] || '';
-            const lName = row[findKey(['lastName', 'nom', 'Lastname']) || ''] || '';
+            const fNameKey = findKey(['firstName', 'prenom', 'prénom', 'Firstname']);
+            const lNameKey = findKey(['lastName', 'nom', 'Lastname']);
+            const emailKey = findKey(['email', 'Email', 'mail']);
+            const createdAtKey = findKey(['createdAt', 'date', 'inscription']);
             
+            const fName = fNameKey ? row[fNameKey] : '';
+            const lName = lNameKey ? row[lNameKey] : '';
+            
+            const safeString = (val: any, maxLen: number) => String(val || '').trim().substring(0, maxLen);
+
             return {
-              firstName: String(fName).trim(),
-              lastName: String(lName).trim(),
-              email: row[findKey(['email', 'Email']) || ''] || '',
-              createdAt: row[findKey(['createdAt', 'date', 'inscription']) || ''] || new Date().toISOString(),
+              firstName: safeString(fName, 100) || 'Inconnu',
+              lastName: safeString(lName, 100),
+              email: safeString(emailKey ? row[emailKey] : '', 150),
+              createdAt: safeString(createdAtKey && row[createdAtKey] ? row[createdAtKey] : new Date().toISOString(), 50),
               isActive: true,
-              uid: 'admin_user'
+              uid: user.uid
             };
-          }).filter(p => p.firstName !== '');
+          }).filter(p => p.firstName !== 'Inconnu' || p.lastName !== '' || p.email !== '');
 
           if (prospectsToImport.length > 0) {
             const batch = writeBatch(db);
@@ -631,6 +638,8 @@ export default function App() {
             });
             await batch.commit();
             showToast(`${prospectsToImport.length} prospects importés avec succès.`, 'success');
+          } else {
+            showToast("Aucun prospect valide trouvé dans le fichier", 'error');
           }
         } catch (error) {
           console.error("Error importing prospects:", error);
@@ -670,15 +679,17 @@ export default function App() {
               firstName = parts[0] || '';
               lastName = parts.slice(1).join(' ') || '';
             } else {
-              firstName = row[findKey(['firstName', 'prenom', 'prénom', 'Firstname']) || ''] || '';
-              lastName = row[findKey(['lastName', 'nom', 'Lastname']) || ''] || '';
+              const fNameKey = findKey(['firstName', 'prenom', 'prénom', 'Firstname']);
+              const lNameKey = findKey(['lastName', 'nom', 'Lastname']);
+              firstName = fNameKey ? row[fNameKey] : '';
+              lastName = lNameKey ? row[lNameKey] : '';
             }
 
             // Detect status
             let isActive = true;
             const statusKey = findKey(['statut', 'état', 'actif', 'résilié', 'contrat', 'status']);
             
-            if (statusKey) {
+            if (statusKey && row[statusKey]) {
               const statusVal = String(row[statusKey]).toLowerCase();
               if (statusVal.includes('résilié') || 
                   statusVal.includes('inactif') || 
@@ -690,18 +701,26 @@ export default function App() {
               }
             }
 
+            const emailKey = findKey(['email', 'Email', 'Adresse e-mail', 'mail']);
+            const phoneKey = findKey(['phone', 'téléphone', 'Téléphone', 'Mobile', 'Tel']);
+            const birthDateKey = findKey(['birthDate', 'naissance', 'Date de naissance']);
+            const addressKey = findKey(['address', 'adresse', 'Adresse postale', 'Rue']);
+            const createdAtKey = findKey(['createdAt', 'inscription', 'Date d\'inscription', 'Adhésion']);
+
+            const safeString = (val: any, maxLen: number) => String(val || '').trim().substring(0, maxLen);
+
             return {
-              firstName: String(firstName).trim() || 'Inconnu',
-              lastName: String(lastName).trim(),
-              email: row[findKey(['email', 'Email', 'Adresse e-mail']) || ''] || '',
-              phone: row[findKey(['phone', 'téléphone', 'Téléphone', 'Mobile', 'Tel']) || ''] || '',
-              birthDate: row[findKey(['birthDate', 'naissance', 'Date de naissance']) || ''] || '',
-              address: row[findKey(['address', 'adresse', 'Adresse postale', 'Rue']) || ''] || '',
-              createdAt: row[findKey(['createdAt', 'inscription', 'Date d\'inscription', 'Adhésion']) || ''] || new Date().toISOString(),
+              firstName: safeString(firstName, 100) || 'Inconnu',
+              lastName: safeString(lastName, 100),
+              email: safeString(emailKey ? row[emailKey] : '', 150),
+              phone: safeString(phoneKey ? row[phoneKey] : '', 50),
+              birthDate: safeString(birthDateKey ? row[birthDateKey] : '', 50),
+              address: safeString(addressKey ? row[addressKey] : '', 250),
+              createdAt: safeString(createdAtKey && row[createdAtKey] ? row[createdAtKey] : new Date().toISOString(), 50),
               isActive,
-              uid: 'admin_user'
+              uid: user.uid
             };
-          }).filter(c => c.firstName !== 'Inconnu' || c.lastName !== '');
+          }).filter(c => c.firstName !== 'Inconnu' || c.lastName !== '' || c.email !== '' || c.phone !== '');
 
           if (clientsToImport.length > 0) {
             // Split into chunks of 500 for Firestore batch limits
@@ -716,6 +735,8 @@ export default function App() {
               await batch.commit();
             }
             showToast(`${clientsToImport.length} clients importés avec succès.`, 'success');
+          } else {
+            showToast("Aucun client valide trouvé dans le fichier", 'error');
           }
         } catch (error) {
           console.error("Error importing clients:", error);
@@ -736,7 +757,7 @@ export default function App() {
 
   const handleSetterImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !user) return;
 
     setIsImportingSetter(true);
     Papa.parse(file, {
@@ -756,12 +777,12 @@ export default function App() {
 
             if (date) {
               await addDoc(collection(db, 'manualStats'), {
-                period_start: date,
+                period_start: String(date).trim().substring(0, 50),
                 period_type: 'day',
                 totalContacts: 0, // Required field
                 totalCalls: calls,
                 totalPickups: pickups,
-                uid: 'admin_user'
+                uid: user.uid
               });
             }
           }
@@ -2400,7 +2421,7 @@ export default function App() {
                   } else {
                     await addDoc(collection(db, 'formulas'), {
                       ...newFormula,
-                      uid: 'admin_user'
+                      uid: user.uid
                     });
                   }
                   setIsFormulaModalOpen(false);
@@ -2516,7 +2537,7 @@ export default function App() {
                   } else {
                     await addDoc(collection(db, 'manualStats'), {
                       ...editingManualStats,
-                      uid: 'admin_user'
+                      uid: user.uid
                     });
                   }
                   setIsManualStatsModalOpen(false);
