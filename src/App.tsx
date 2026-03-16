@@ -296,15 +296,15 @@ export default function App() {
   const seedDefaultFormulas = async () => {
     if (!user) return;
     const defaults = [
-      { name: 'Hebdomadaire Basique', price: 30, period: 'week', uid: user.uid },
-      { name: 'Hebdomadaire Classique', price: 50, period: 'week', uid: user.uid },
-      { name: 'Hebdomadaire Premium', price: 80, period: 'week', uid: user.uid },
-      { name: 'Mensuel Basique', price: 100, period: 'month', uid: user.uid },
-      { name: 'Mensuel Classique', price: 150, period: 'month', uid: user.uid },
-      { name: 'Mensuel Premium', price: 250, period: 'month', uid: user.uid },
-      { name: 'Annuel Basique', price: 1000, period: 'year', uid: user.uid },
-      { name: 'Annuel Classique', price: 1500, period: 'year', uid: user.uid },
-      { name: 'Annuel Premium', price: 2500, period: 'year', uid: user.uid }
+      { name: 'Hebdomadaire Basique', price: 30, period: 'week', uid: 'admin_user' },
+      { name: 'Hebdomadaire Classique', price: 50, period: 'week', uid: 'admin_user' },
+      { name: 'Hebdomadaire Premium', price: 80, period: 'week', uid: 'admin_user' },
+      { name: 'Mensuel Basique', price: 100, period: 'month', uid: 'admin_user' },
+      { name: 'Mensuel Classique', price: 150, period: 'month', uid: 'admin_user' },
+      { name: 'Mensuel Premium', price: 250, period: 'month', uid: 'admin_user' },
+      { name: 'Annuel Basique', price: 1000, period: 'year', uid: 'admin_user' },
+      { name: 'Annuel Classique', price: 1500, period: 'year', uid: 'admin_user' },
+      { name: 'Annuel Premium', price: 2500, period: 'year', uid: 'admin_user' }
     ];
     
     try {
@@ -323,7 +323,7 @@ export default function App() {
 
   const handleDailyLogSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingDailyLog || !user) return;
+    if (!editingDailyLog) return;
 
     try {
       if (editingDailyLog.id) {
@@ -333,7 +333,7 @@ export default function App() {
       } else {
         await addDoc(collection(db, 'dailyLogs'), {
           ...editingDailyLog,
-          uid: user.uid
+          uid: 'admin_user'
         });
       }
       setIsDailyLogModalOpen(false);
@@ -345,8 +345,8 @@ export default function App() {
 
   const handleRelanceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!relanceFormData.name || !relanceFormData.targetDate || !user) {
-      console.error("Missing required fields or user not authenticated");
+    if (!relanceFormData.name || !relanceFormData.targetDate) {
+      console.error("Missing required fields");
       return;
     }
 
@@ -365,7 +365,7 @@ export default function App() {
         dueDate: dayBefore.toISOString(),
         status: 'PENDING',
         createdAt: new Date().toISOString(),
-        uid: user.uid
+        uid: 'admin_user'
       });
 
       // Create Jour J reminder
@@ -375,7 +375,7 @@ export default function App() {
         dueDate: targetDate.toISOString(),
         status: 'PENDING',
         createdAt: new Date().toISOString(),
-        uid: user.uid
+        uid: 'admin_user'
       });
 
       setIsRelanceModalOpen(false);
@@ -531,13 +531,12 @@ export default function App() {
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
     try {
       await addDoc(collection(db, 'clients'), {
         ...newClient,
         createdAt: new Date(newClient.createdAt).toISOString(),
         isActive: true,
-        uid: user.uid
+        uid: 'admin_user'
       });
       setIsClientModalOpen(false);
       setNewClient({ 
@@ -612,7 +611,7 @@ export default function App() {
               email: row[findKey(['email', 'Email']) || ''] || '',
               createdAt: row[findKey(['createdAt', 'date', 'inscription']) || ''] || new Date().toISOString(),
               isActive: true,
-              uid: user.uid
+              uid: 'admin_user'
             };
           }).filter(p => p.firstName !== '');
 
@@ -692,7 +691,7 @@ export default function App() {
               address: row[findKey(['address', 'adresse', 'Adresse postale', 'Rue']) || ''] || '',
               createdAt: row[findKey(['createdAt', 'inscription', 'Date d\'inscription', 'Adhésion']) || ''] || new Date().toISOString(),
               isActive,
-              uid: user.uid
+              uid: 'admin_user'
             };
           }).filter(c => c.firstName !== 'Inconnu' || c.lastName !== '');
 
@@ -747,14 +746,14 @@ export default function App() {
             const calls = callsKey ? parseInt(row[callsKey]) || 0 : 0;
             const pickups = pickupsKey ? parseInt(row[pickupsKey]) || 0 : 0;
 
-            if (date && user) {
+            if (date) {
               await addDoc(collection(db, 'manualStats'), {
                 period_start: date,
                 period_type: 'day',
                 totalContacts: 0, // Required field
                 totalCalls: calls,
                 totalPickups: pickups,
-                uid: user.uid
+                uid: 'admin_user'
               });
             }
           }
@@ -883,49 +882,6 @@ export default function App() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-      </div>
-    );
-  }
-
-  // L'authentification est désormais automatique (anonyme)
-  // Si l'utilisateur n'est pas trouvé, c'est probablement que l'authentification anonyme n'est pas activée
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center space-y-6">
-          <div className="w-20 h-20 bg-rose-100 rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-rose-200">
-            <X className="w-10 h-10 text-rose-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Authentification requise</h1>
-            <p className="text-slate-500 mt-2">
-              Pour utiliser l'application sans écran de connexion, vous devez activer l'authentification <strong>Anonyme</strong> dans votre console Firebase.
-            </p>
-            {authError && (
-              <div className="mt-4 p-3 bg-rose-50 border border-rose-100 rounded-xl text-xs text-rose-600 text-left font-mono break-words">
-                <strong>Erreur technique :</strong> {authError}
-              </div>
-            )}
-          </div>
-          <button 
-            onClick={() => window.location.reload()}
-            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-2xl font-bold transition-all"
-          >
-            J'ai activé l'option, réessayer
-          </button>
-          <div className="relative flex items-center py-2">
-            <div className="flex-grow border-t border-slate-200"></div>
-            <span className="flex-shrink-0 mx-4 text-slate-400 text-xs uppercase tracking-wider font-bold">Ou</span>
-            <div className="flex-grow border-t border-slate-200"></div>
-          </div>
-          <button 
-            onClick={login}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-3"
-          >
-            <ArrowUpRight className="w-5 h-5" />
-            Se connecter avec Google
-          </button>
-        </div>
       </div>
     );
   }
@@ -2394,14 +2350,13 @@ export default function App() {
             <form 
               onSubmit={async (e) => {
                 e.preventDefault();
-                if (!user) return;
                 try {
                   if (formulaToEdit) {
                     await updateDoc(doc(db, 'formulas', formulaToEdit.id.toString()), newFormula);
                   } else {
                     await addDoc(collection(db, 'formulas'), {
                       ...newFormula,
-                      uid: user.uid
+                      uid: 'admin_user'
                     });
                   }
                   setIsFormulaModalOpen(false);
@@ -2508,7 +2463,7 @@ export default function App() {
             <form 
               onSubmit={async (e) => {
                 e.preventDefault();
-                if (!editingManualStats || !user) return;
+                if (!editingManualStats) return;
                 try {
                   if (editingManualStats.id) {
                     const updates = { ...editingManualStats };
@@ -2517,7 +2472,7 @@ export default function App() {
                   } else {
                     await addDoc(collection(db, 'manualStats'), {
                       ...editingManualStats,
-                      uid: user.uid
+                      uid: 'admin_user'
                     });
                   }
                   setIsManualStatsModalOpen(false);

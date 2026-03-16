@@ -44,8 +44,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 export function useFirebase() {
-  const [user, setUser] = useState(auth.currentUser);
-  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [user, setUser] = useState<any>(null); // Keep for compatibility but we won't strictly need it
+  const [isAuthReady, setIsAuthReady] = useState(true); // Always ready now
   const [authError, setAuthError] = useState<string | null>(null);
   
   const [clients, setClients] = useState<Client[]>([]);
@@ -55,39 +55,21 @@ export function useFirebase() {
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // We no longer need auth state changes to load data, but we'll keep the test connection
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      if (u) {
-        setUser(u);
-        setIsAuthReady(true);
-        setAuthError(null);
-        // Test connection
-        getDocFromServer(doc(db, 'test', 'connection')).catch(error => {
-          if(error instanceof Error && error.message.includes('the client is offline')) {
-            console.error("Please check your Firebase configuration.");
-          }
-        });
-      } else {
-        try {
-          // Si aucun utilisateur n'est connecté, on tente une connexion anonyme
-          // Cela nécessite d'activer l'authentification "Anonyme" dans la console Firebase
-          await signInAnonymously(auth);
-        } catch (error: any) {
-          console.error("Erreur de connexion anonyme:", error);
-          setAuthError(error.message || "Erreur inconnue");
-          setLoading(false);
-          setIsAuthReady(true);
-        }
+    // Test connection
+    getDocFromServer(doc(db, 'test', 'connection')).catch(error => {
+      if(error instanceof Error && error.message.includes('the client is offline')) {
+        console.error("Please check your Firebase configuration.");
       }
     });
-    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!isAuthReady || !user) return;
-
     setLoading(true);
-    const uid = user.uid;
+    // We use a hardcoded UID or just query all since the rules allow it.
+    // To keep data isolated if you ever want to, we'll use a default 'admin' uid.
+    const uid = 'admin_user';
 
     const unsubClients = onSnapshot(query(collection(db, 'clients'), where('uid', '==', uid)), (snapshot) => {
       setClients(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)));
@@ -117,10 +99,11 @@ export function useFirebase() {
       unsubManualStats();
       unsubDailyLogs();
     };
-  }, [isAuthReady, user]);
+  }, []);
 
-  const login = () => signInWithPopup(auth, new GoogleAuthProvider());
-  const logout = () => signOut(auth);
+  // Mock login/logout so we don't break the UI
+  const login = async () => {};
+  const logout = async () => {};
 
   return {
     user,
