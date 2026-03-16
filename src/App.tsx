@@ -831,7 +831,7 @@ export default function App() {
       p.formulaId?.toString() === specificFormulaFilter;
 
     return matchesSearch && matchesType && matchesPeriod && matchesStatus && matchesSpecificFormula;
-  });
+  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const reminders = React.useMemo(() => {
     const list: { id: string, name: string, date: Date, text: string, isOverdue: boolean, isToday: boolean }[] = [];
