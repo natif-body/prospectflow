@@ -27,8 +27,10 @@ export interface Client {
   createdAt: string;
   signedAt?: string;
   formulaId?: string;
-  isActive: boolean;
+  isActive: boolean; // Legacy, keep for backward compatibility or migrate
+  status?: 'ACTIVE' | 'RESILIE' | 'EN_PAUSE' | 'A_REGULARISER';
   deactivatedAt?: string;
+  statusUpdatedAt?: string;
 }
 
 export interface Formula {
@@ -54,6 +56,8 @@ export interface Relance {
   dueDate: string;
   createdAt: string;
   status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
+  statusJ1?: 'PENDING' | 'COMPLETED';
+  statusJourJ?: 'PENDING' | 'COMPLETED';
 }
 
 export interface DashboardStats {
@@ -78,6 +82,10 @@ export interface DashboardStats {
   churnRate: number;
   totalRevenueTTC: number;
   totalRevenueHT: number;
+  totalRevenueNetTTC: number;
+  totalRevenueNetHT: number;
+  lostRevenueTTC: number;
+  lostRevenueHT: number;
   averageBasketTTC: number;
   averageBasketHT: number;
   showUpRate: number;
@@ -89,6 +97,18 @@ export interface DashboardStats {
   contactsDigital: number;
   contactsNonDigital: number;
   digitalPercentage: number;
+  newMembersNet: number;
+  newMembersTotal: number;
+  cancelledMembers: number;
+  totalCancelled: number;
+  cancelledPercentage: number;
+  pausedMembers: number;
+  pausedPercentage: number;
+  regulariserMembers: number;
+  regulariserPercentage: number;
+  totalAdherentsAndNonClients: number;
+  totalDecisions: number;
+  totalAppointments: number;
   dailyStats: {
     date: string;
     prospects: number;

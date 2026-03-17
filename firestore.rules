@@ -18,6 +18,7 @@ service cloud.firestore {
 
     function isValidOptionalString(field, minLen, maxLen) {
       return !(field in request.resource.data) ||
+             request.resource.data[field] == null ||
              (request.resource.data[field] is string &&
               request.resource.data[field].size() >= minLen &&
               request.resource.data[field].size() <= maxLen);
@@ -38,7 +39,7 @@ service cloud.firestore {
              isValidString('createdAt', 1, 50) &&
              isValidOptionalString('signedAt', 0, 50) &&
              isValidOptionalString('deactivatedAt', 0, 50) &&
-             (!( 'formulaId' in data ) || data.formulaId is string || data.formulaId is number) &&
+             (!( 'formulaId' in data ) || data.formulaId == null || data.formulaId is string || data.formulaId is number) &&
              data.isActive is bool;
     }
     
@@ -57,7 +58,9 @@ service cloud.firestore {
              isValidOptionalString('notes', 0, 1000) &&
              isValidString('dueDate', 1, 50) &&
              isValidString('createdAt', 1, 50) &&
-             data.status in ['PENDING', 'COMPLETED', 'CANCELLED'];
+             data.status in ['PENDING', 'COMPLETED', 'CANCELLED'] &&
+             (!('statusJ1' in data) || data.statusJ1 in ['PENDING', 'COMPLETED']) &&
+             (!('statusJourJ' in data) || data.statusJourJ in ['PENDING', 'COMPLETED']);
     }
     
     function isValidManualStats(data) {

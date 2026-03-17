@@ -7,6 +7,7 @@ import {
   XCircle, 
   Clock, 
   TrendingUp, 
+  TrendingDown,
   UserPlus, 
   Search,
   MoreHorizontal,
@@ -69,7 +70,7 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, writeBatch } from 'fireb
 
 export default function App() {
   // --- Sub-components ---
-  const StatCard = ({ title, value, subValue, icon: Icon, trend, color }: any) => (
+  const StatCard = ({ title, value, subValue, icon: Icon, trend, color, bottomText }: any) => (
     <div className="glass-card p-6 flex flex-col gap-4">
       <div className="flex justify-between items-start">
         <div className={cn("p-2 rounded-xl", color)}>
@@ -86,15 +87,27 @@ export default function App() {
         <p className="text-sm font-medium text-slate-500">{title}</p>
         <h3 className="text-2xl font-bold text-slate-900 mt-1">{value}</h3>
         {subValue && <p className="text-xs text-slate-400 mt-1 font-medium">{subValue}</p>}
+        {bottomText && <p className="text-xs text-indigo-600 mt-1.5 font-bold bg-indigo-50 inline-block px-2 py-0.5 rounded-md">{bottomText}</p>}
       </div>
     </div>
   );
 
-  const formatPrice = (priceTTC: number) => {
+  const formatPrice = (priceTTC: number, almaCommission?: number) => {
     const priceHT = priceTTC / 1.2;
+    let netHT = priceHT;
+    let netTTC = priceTTC;
+
+    if (almaCommission) {
+      const commissionAmount = priceHT * (almaCommission / 100);
+      netHT = priceHT - commissionAmount;
+      netTTC = priceTTC - commissionAmount;
+    }
+
     return {
       ttc: `${priceTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ TTC`,
-      ht: `${priceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ HT`
+      ht: `${priceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ HT`,
+      netTtc: `${netTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ TTC (Net)`,
+      netHt: `${netHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ HT (Net)`
     };
   };
 
@@ -215,10 +228,15 @@ export default function App() {
   const [isReportingModalOpen, setIsReportingModalOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
   const [clientToEdit, setClientToEdit] = useState<Client | null>(null);
+  const [statusPrompt, setStatusPrompt] = useState<{
+    clientId: string;
+    newStatus: string;
+    date: string;
+  } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [clientTypeFilter, setClientTypeFilter] = useState<'all' | 'client' | 'membre'>('all');
   const [formulaPeriodFilter, setFormulaPeriodFilter] = useState<'all' | 'week' | 'month' | 'year'>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'paused' | 'regulariser'>('all');
   const [specificFormulaFilter, setSpecificFormulaFilter] = useState<string>('all');
   const [isImporting, setIsImporting] = useState(false);
   const [isImportingSetter, setIsImportingSetter] = useState(false);
@@ -365,22 +383,14 @@ export default function App() {
       // Remove targetDate from the data sent to Firestore to avoid rule issues
       const { targetDate: _, ...baseData } = relanceFormData;
 
-      // Create J-1 reminder
+      // Create single reminder tracking both J-1 and Jour J
       await addDoc(collection(db, 'relances'), {
         ...baseData,
-        name: `${relanceFormData.name} (J-1)`,
-        dueDate: dayBefore.toISOString(),
-        status: 'PENDING',
-        createdAt: new Date().toISOString(),
-        uid: 'admin_user'
-      });
-
-      // Create Jour J reminder
-      await addDoc(collection(db, 'relances'), {
-        ...baseData,
-        name: `${relanceFormData.name} (Jour J)`,
+        name: relanceFormData.name,
         dueDate: targetDate.toISOString(),
         status: 'PENDING',
+        statusJ1: 'PENDING',
+        statusJourJ: 'PENDING',
         createdAt: new Date().toISOString(),
         uid: 'admin_user'
       });
@@ -419,6 +429,7 @@ export default function App() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedRangePreset, setSelectedRangePreset] = useState('all');
   const [basketPeriod, setBasketPeriod] = useState<'week' | 'month' | 'year'>('month');
+  const [showNetRevenue, setShowNetRevenue] = useState(false);
   
   // Form state
   const [newClient, setNewClient] = useState({
@@ -543,6 +554,7 @@ export default function App() {
         ...newClient,
         createdAt: new Date(newClient.createdAt).toISOString(),
         isActive: true,
+        status: 'ACTIVE',
         uid: 'admin_user'
       });
       setIsClientModalOpen(false);
@@ -612,6 +624,7 @@ export default function App() {
             const fNameKey = findKey(['firstName', 'prenom', 'prénom', 'Firstname']);
             const lNameKey = findKey(['lastName', 'nom', 'Lastname']);
             const emailKey = findKey(['email', 'Email', 'mail']);
+            const phoneKey = findKey(['phone', 'telephone', 'téléphone', 'tel', 'mobile']);
             const createdAtKey = findKey(['createdAt', 'date', 'inscription']);
             
             const fName = fNameKey ? row[fNameKey] : '';
@@ -623,19 +636,41 @@ export default function App() {
               firstName: safeString(fName, 100) || 'Inconnu',
               lastName: safeString(lName, 100),
               email: safeString(emailKey ? row[emailKey] : '', 150),
-              createdAt: safeString(createdAtKey && row[createdAtKey] ? row[createdAtKey] : new Date().toISOString(), 50),
+              phone: safeString(phoneKey ? row[phoneKey] : '', 50),
+              createdAt: (() => {
+                const rawDate = createdAtKey && row[createdAtKey] ? row[createdAtKey] : '';
+                if (!rawDate) return new Date().toISOString();
+                // Try to parse DD/MM/YYYY or similar
+                const parts = rawDate.split(/[-/]/);
+                if (parts.length === 3) {
+                  // Assume DD/MM/YYYY
+                  const day = parseInt(parts[0]);
+                  const month = parseInt(parts[1]) - 1;
+                  const year = parts[2].length === 2 ? 2000 + parseInt(parts[2]) : parseInt(parts[2]);
+                  const d = new Date(year, month, day);
+                  if (!isNaN(d.getTime())) return d.toISOString();
+                }
+                const d = new Date(rawDate);
+                return !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+              })(),
               isActive: true,
+              status: 'ACTIVE',
               uid: 'admin_user'
             };
           }).filter(p => p.firstName !== 'Inconnu' || p.lastName !== '' || p.email !== '');
 
           if (prospectsToImport.length > 0) {
-            const batch = writeBatch(db);
-            prospectsToImport.forEach(prospect => {
-              const docRef = doc(collection(db, 'clients'));
-              batch.set(docRef, prospect);
-            });
-            await batch.commit();
+            // Firestore batches are limited to 500 operations
+            const BATCH_SIZE = 500;
+            for (let i = 0; i < prospectsToImport.length; i += BATCH_SIZE) {
+              const batch = writeBatch(db);
+              const chunk = prospectsToImport.slice(i, i + BATCH_SIZE);
+              chunk.forEach(prospect => {
+                const docRef = doc(collection(db, 'clients'));
+                batch.set(docRef, prospect);
+              });
+              await batch.commit();
+            }
             showToast(`${prospectsToImport.length} prospects importés avec succès.`, 'success');
           } else {
             showToast("Aucun prospect valide trouvé dans le fichier", 'error');
@@ -686,6 +721,7 @@ export default function App() {
 
             // Detect status
             let isActive = true;
+            let status = 'ACTIVE';
             const statusKey = findKey(['statut', 'état', 'actif', 'résilié', 'contrat', 'status']);
             
             if (statusKey && row[statusKey]) {
@@ -697,6 +733,13 @@ export default function App() {
                   statusVal === '0' ||
                   statusVal === 'false') {
                 isActive = false;
+                status = 'RESILIE';
+              } else if (statusVal.includes('pause')) {
+                isActive = false;
+                status = 'EN_PAUSE';
+              } else if (statusVal.includes('régulariser') || statusVal.includes('regulariser')) {
+                isActive = false;
+                status = 'A_REGULARISER';
               }
             }
 
@@ -717,6 +760,8 @@ export default function App() {
               address: safeString(addressKey ? row[addressKey] : '', 250),
               createdAt: safeString(createdAtKey && row[createdAtKey] ? row[createdAtKey] : new Date().toISOString(), 50),
               isActive,
+              status,
+              deactivatedAt: !isActive ? new Date().toISOString() : null,
               uid: 'admin_user'
             };
           }).filter(c => c.firstName !== 'Inconnu' || c.lastName !== '' || c.email !== '' || c.phone !== '');
@@ -868,9 +913,12 @@ export default function App() {
     const matchesPeriod = formulaPeriodFilter === 'all' || 
       (formula && formula.period === formulaPeriodFilter);
 
+    const currentStatus = p.status || (p.isActive ? 'ACTIVE' : 'RESILIE');
     const matchesStatus = statusFilter === 'all' || 
-      (statusFilter === 'active' && p.isActive) || 
-      (statusFilter === 'inactive' && !p.isActive);
+      (statusFilter === 'active' && currentStatus === 'ACTIVE') || 
+      (statusFilter === 'inactive' && currentStatus === 'RESILIE') ||
+      (statusFilter === 'paused' && currentStatus === 'EN_PAUSE') ||
+      (statusFilter === 'regulariser' && currentStatus === 'A_REGULARISER');
 
     const matchesSpecificFormula = specificFormulaFilter === 'all' || 
       p.formulaId?.toString() === specificFormulaFilter;
@@ -879,17 +927,47 @@ export default function App() {
   }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const reminders = React.useMemo(() => {
-    const list: { id: string, name: string, date: Date, text: string, isOverdue: boolean, isToday: boolean }[] = [];
+    const list: { id: string, name: string, date: Date, text: string, isOverdue: boolean, isToday: boolean, type?: string }[] = [];
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
     relances.forEach(r => {
       if (r.status === 'PENDING') {
-        const d = new Date(r.dueDate);
-        d.setHours(0, 0, 0, 0);
-        const isToday = d.getTime() === now.getTime();
-        const isOverdue = d.getTime() < now.getTime();
-        list.push({ id: `relance-${r.id}`, name: r.name, date: d, text: format(d, 'dd/MM'), isOverdue, isToday });
+        const dJourJ = new Date(r.dueDate);
+        dJourJ.setHours(0, 0, 0, 0);
+        
+        const dJ1 = new Date(dJourJ);
+        dJ1.setDate(dJ1.getDate() - 1);
+
+        // Check J-1
+        if (r.statusJ1 !== 'COMPLETED') {
+          const isTodayJ1 = dJ1.getTime() === now.getTime();
+          const isOverdueJ1 = dJ1.getTime() < now.getTime();
+          list.push({
+            id: `relance-${r.id}-J1`,
+            name: r.name,
+            date: dJ1,
+            text: `J-1 (${format(dJ1, 'dd/MM')})`,
+            isOverdue: isOverdueJ1,
+            isToday: isTodayJ1,
+            type: 'J-1'
+          });
+        }
+
+        // Check Jour J
+        if (r.statusJourJ !== 'COMPLETED') {
+          const isTodayJourJ = dJourJ.getTime() === now.getTime();
+          const isOverdueJourJ = dJourJ.getTime() < now.getTime();
+          list.push({
+            id: `relance-${r.id}-JourJ`,
+            name: r.name,
+            date: dJourJ,
+            text: `Jour J (${format(dJourJ, 'dd/MM')})`,
+            isOverdue: isOverdueJourJ,
+            isToday: isTodayJourJ,
+            type: 'Jour J'
+          });
+        }
 
         // Also scan notes for other dates
         if (r.notes) {
@@ -1232,7 +1310,7 @@ export default function App() {
                 </motion.div>
               )}
               {/* Stats Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
                 <StatCard 
                   title="Total Contact" 
                   value={stats.totalContacts} 
@@ -1248,31 +1326,79 @@ export default function App() {
                 <StatCard 
                   title="Taux RDV" 
                   value={`${stats.appointmentRate.toFixed(1)}%`} 
+                  bottomText={`${stats.appointmentsTaken} / ${stats.totalContacts}`}
                   icon={Calendar} 
                   color="bg-indigo-50 text-indigo-600"
                 />
                 <StatCard 
                   title="Taux Show-up" 
                   value={`${stats.showUpRate.toFixed(1)}%`} 
+                  bottomText={`${stats.attendance.showedUp} / ${stats.totalAppointments}`}
                   icon={UserCheck} 
                   color="bg-emerald-50 text-emerald-600"
                 />
                 <StatCard 
                   title="Taux Closing" 
                   value={`${stats.closingRate.toFixed(1)}%`} 
+                  bottomText={`${stats.signatures} / ${stats.totalDecisions}`}
                   icon={CheckCircle2} 
                   color="bg-violet-50 text-violet-600"
                 />
+                <div 
+                  className="cursor-pointer transition-transform active:scale-95"
+                  onClick={() => setShowNetRevenue(!showNetRevenue)}
+                >
+                  <StatCard 
+                    title={showNetRevenue ? "CA Vente (Net)" : "CA Vente"} 
+                    value={formatExactPrice(
+                      showNetRevenue ? stats.totalRevenueNetHT : stats.totalRevenueHT, 
+                      showNetRevenue ? stats.totalRevenueNetTTC : stats.totalRevenueTTC
+                    ).ht} 
+                    subValue={formatExactPrice(
+                      showNetRevenue ? stats.totalRevenueNetHT : stats.totalRevenueHT, 
+                      showNetRevenue ? stats.totalRevenueNetTTC : stats.totalRevenueTTC
+                    ).ttc}
+                    icon={TrendingUp} 
+                    color={showNetRevenue ? "bg-emerald-600 text-white" : "bg-indigo-600 text-white"}
+                  />
+                </div>
                 <StatCard 
-                  title="Chiffre d'Affaires" 
-                  value={formatExactPrice(stats.totalRevenueHT, stats.totalRevenueTTC).ht} 
-                  subValue={formatExactPrice(stats.totalRevenueHT, stats.totalRevenueTTC).ttc}
-                  icon={TrendingUp} 
-                  color="bg-indigo-600 text-white"
+                  title="Perte Potentielle (MRR)" 
+                  value={formatExactPrice(stats.lostRevenueHT, stats.lostRevenueTTC).ht} 
+                  subValue={formatExactPrice(stats.lostRevenueHT, stats.lostRevenueTTC).ttc}
+                  icon={TrendingDown} 
+                  color="bg-rose-600 text-white"
                 />
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-6 gap-4 md:gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 md:gap-6">
+                <StatCard 
+                  title="RDV Venus" 
+                  value={stats.attendance.showedUp} 
+                  icon={UserCheck} 
+                  color="bg-emerald-50 text-emerald-600"
+                />
+                <StatCard 
+                  title="RDV Non Honorés" 
+                  value={stats.attendance.noShow} 
+                  icon={Ban} 
+                  color="bg-rose-50 text-rose-600"
+                />
+                <StatCard 
+                  title="RDV Annulés" 
+                  value={stats.attendance.cancelled} 
+                  icon={XCircle} 
+                  color="bg-slate-100 text-slate-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
+                <StatCard 
+                  title="Total Adhérents + Clients" 
+                  value={stats.totalAdherentsAndNonClients} 
+                  icon={Users} 
+                  color="bg-blue-50 text-blue-600"
+                />
                 <StatCard 
                   title="Total Adhérents" 
                   value={stats.totalAdherents} 
@@ -1283,6 +1409,13 @@ export default function App() {
                   title="Total Clients (sans formule)" 
                   value={stats.totalClients} 
                   icon={UserCheck} 
+                  color="bg-slate-100 text-slate-600"
+                />
+                <StatCard 
+                  title="Nouveaux Adhérents" 
+                  value={stats.newMembersNet > 0 ? `+${stats.newMembersNet}` : stats.newMembersNet} 
+                  bottomText={`+${stats.newMembersTotal} / -${stats.cancelledMembers}`}
+                  icon={Users} 
                   color="bg-emerald-50 text-emerald-600"
                 />
                 <StatCard 
@@ -1316,17 +1449,36 @@ export default function App() {
                     color="bg-amber-50 text-amber-600"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 md:gap-6">
                 <StatCard 
                   title="Taux Décroché" 
                   value={`${stats.pickupRate.toFixed(1)}%`} 
+                  bottomText={`${stats.totalPickups} / ${stats.totalCalls}`}
                   icon={Clock} 
                   color="bg-indigo-50 text-indigo-600"
                 />
                 <StatCard 
-                  title="Taux Résiliation" 
-                  value={`${stats.churnRate.toFixed(1)}%`} 
+                  title="Résiliés" 
+                  value={`${stats.cancelledPercentage.toFixed(1)}%`} 
+                  bottomText={`${stats.totalCancelled} adhérents`}
                   icon={Ban} 
                   color="bg-rose-50 text-rose-600"
+                />
+                <StatCard 
+                  title="En Pause" 
+                  value={`${stats.pausedPercentage.toFixed(1)}%`} 
+                  bottomText={`${stats.pausedMembers} adhérents`}
+                  icon={Clock} 
+                  color="bg-amber-50 text-amber-600"
+                />
+                <StatCard 
+                  title="À Régulariser" 
+                  value={`${stats.regulariserPercentage.toFixed(1)}%`} 
+                  bottomText={`${stats.regulariserMembers} adhérents`}
+                  icon={TrendingUp} 
+                  color="bg-orange-50 text-orange-600"
                 />
               </div>
 
@@ -1555,11 +1707,13 @@ export default function App() {
                       </button>
                     ))}
                   </div>
-                  <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl shadow-sm">
+                  <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl shadow-sm overflow-x-auto">
                     {[
                       { id: 'all', label: 'Statut' },
                       { id: 'active', label: 'Actif' },
-                      { id: 'inactive', label: 'Résilié' }
+                      { id: 'inactive', label: 'Résilié' },
+                      { id: 'paused', label: 'En pause' },
+                      { id: 'regulariser', label: 'À régulariser' }
                     ].map(s => (
                       <button
                         key={s.id}
@@ -1640,17 +1794,38 @@ export default function App() {
                             {format(new Date(client.createdAt), 'dd/MM/yyyy')}
                           </td>
                           <td className="px-6 py-4">
-                            <button 
-                              onClick={() => handleUpdateStatus(client.id, { isActive: !client.isActive, deactivatedAt: !client.isActive ? null : new Date().toISOString() })}
+                            <select
+                              value={client.status || (client.isActive ? 'ACTIVE' : 'RESILIE')}
+                              onChange={(e) => {
+                                const newStatus = e.target.value as any;
+                                if (newStatus === 'ACTIVE') {
+                                  handleUpdateStatus(client.id, {
+                                    status: newStatus,
+                                    isActive: true,
+                                    deactivatedAt: null,
+                                    statusUpdatedAt: new Date().toISOString()
+                                  });
+                                } else {
+                                  setStatusPrompt({
+                                    clientId: client.id,
+                                    newStatus,
+                                    date: client.deactivatedAt ? client.deactivatedAt.split('T')[0] : new Date().toISOString().split('T')[0]
+                                  });
+                                }
+                              }}
                               className={cn(
-                                "text-xs px-3 py-1 rounded-full font-bold transition-all",
-                                client.isActive 
-                                  ? "bg-emerald-100 text-emerald-700 border border-emerald-200" 
-                                  : "bg-rose-100 text-rose-700 border border-rose-200"
+                                "text-xs px-2 py-1 rounded-full font-bold transition-all border-none focus:ring-0 cursor-pointer",
+                                (client.status || (client.isActive ? 'ACTIVE' : 'RESILIE')) === 'ACTIVE' ? "bg-emerald-100 text-emerald-700" :
+                                (client.status || (client.isActive ? 'ACTIVE' : 'RESILIE')) === 'RESILIE' ? "bg-rose-100 text-rose-700" :
+                                (client.status || (client.isActive ? 'ACTIVE' : 'RESILIE')) === 'EN_PAUSE' ? "bg-amber-100 text-amber-700" :
+                                "bg-blue-100 text-blue-700"
                               )}
                             >
-                              {client.isActive ? 'ACTIF' : 'RÉSILIÉ'}
-                            </button>
+                              <option value="ACTIVE">ACTIF</option>
+                              <option value="RESILIE">RÉSILIÉ</option>
+                              <option value="EN_PAUSE">EN PAUSE</option>
+                              <option value="A_REGULARISER">À RÉGULARISER</option>
+                            </select>
                           </td>
                           <td className="px-6 py-4 text-right">
                             <div className="flex items-center justify-end gap-2">
@@ -1717,7 +1892,18 @@ export default function App() {
                   </div>
                 ) : (
                   relances.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()).map(relance => {
-                    const isOverdue = new Date(relance.dueDate) < new Date() && relance.status === 'PENDING';
+                    const now = new Date();
+                    now.setHours(0, 0, 0, 0);
+                    
+                    const dJourJ = new Date(relance.dueDate);
+                    dJourJ.setHours(0, 0, 0, 0);
+                    
+                    const dJ1 = new Date(dJourJ);
+                    dJ1.setDate(dJ1.getDate() - 1);
+
+                    const isOverdueJ1 = relance.statusJ1 !== 'COMPLETED' && dJ1.getTime() < now.getTime();
+                    const isOverdueJourJ = relance.statusJourJ !== 'COMPLETED' && dJourJ.getTime() < now.getTime();
+                    const isOverdue = relance.status === 'PENDING' && (isOverdueJ1 || isOverdueJourJ);
                     
                     return (
                       <div key={relance.id} className={cn(
@@ -1772,20 +1958,55 @@ export default function App() {
                         </div>
 
                         {relance.status === 'PENDING' && (
-                          <div className="flex gap-2 pt-4 border-t border-slate-100">
-                            <button 
-                              onClick={async () => {
-                                try {
-                                  await updateDoc(doc(db, 'relances', relance.id.toString()), { status: 'COMPLETED' });
-                                } catch (error) {
-                                  handleFirestoreError(error, OperationType.UPDATE, `relances/${relance.id}`);
-                                }
-                              }}
-                              className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
-                            >
-                              <CheckCircle2 className="w-4 h-4" />
-                              Fait
-                            </button>
+                          <div className="flex flex-col gap-2 pt-4 border-t border-slate-100">
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={async () => {
+                                  try {
+                                    const updates: any = { statusJ1: 'COMPLETED' };
+                                    if (relance.statusJourJ === 'COMPLETED') {
+                                      updates.status = 'COMPLETED';
+                                    }
+                                    await updateDoc(doc(db, 'relances', relance.id.toString()), updates);
+                                  } catch (error) {
+                                    handleFirestoreError(error, OperationType.UPDATE, `relances/${relance.id}`);
+                                  }
+                                }}
+                                disabled={relance.statusJ1 === 'COMPLETED'}
+                                className={cn(
+                                  "flex-1 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5",
+                                  relance.statusJ1 === 'COMPLETED' 
+                                    ? "bg-emerald-100 text-emerald-700 cursor-not-allowed" 
+                                    : "bg-amber-50 hover:bg-amber-100 text-amber-700"
+                                )}
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                J-1 {relance.statusJ1 === 'COMPLETED' && '✓'}
+                              </button>
+                              <button 
+                                onClick={async () => {
+                                  try {
+                                    const updates: any = { statusJourJ: 'COMPLETED' };
+                                    if (relance.statusJ1 === 'COMPLETED') {
+                                      updates.status = 'COMPLETED';
+                                    }
+                                    await updateDoc(doc(db, 'relances', relance.id.toString()), updates);
+                                  } catch (error) {
+                                    handleFirestoreError(error, OperationType.UPDATE, `relances/${relance.id}`);
+                                  }
+                                }}
+                                disabled={relance.statusJourJ === 'COMPLETED'}
+                                className={cn(
+                                  "flex-1 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5",
+                                  relance.statusJourJ === 'COMPLETED' 
+                                    ? "bg-emerald-100 text-emerald-700 cursor-not-allowed" 
+                                    : "bg-amber-50 hover:bg-amber-100 text-amber-700"
+                                )}
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Jour J {relance.statusJourJ === 'COMPLETED' && '✓'}
+                              </button>
+                            </div>
                             <button 
                               onClick={async () => {
                                 showConfirm('Annuler la relance', 'Voulez-vous vraiment annuler cette relance ?', async () => {
@@ -1797,9 +2018,9 @@ export default function App() {
                                   }
                                 });
                               }}
-                              className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-600 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                              className="w-full bg-slate-50 hover:bg-slate-100 text-slate-600 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-2"
                             >
-                              <X className="w-4 h-4" />
+                              <X className="w-3.5 h-3.5" />
                               Annuler
                             </button>
                           </div>
@@ -1855,6 +2076,11 @@ export default function App() {
                               <p className="text-xs text-slate-400 font-medium">
                                 {formatPrice(f.price).ttc}
                               </p>
+                              {f.period === 'year' && f.almaCommission && (
+                                <p className="text-xs text-emerald-600 font-bold mt-1">
+                                  Net HT : {((f.price / 1.2) - ((f.price / 1.2) * (f.almaCommission / 100))).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ HT
+                                </p>
+                              )}
                             </div>
                             <div className="flex gap-2">
                               <button 
@@ -2101,7 +2327,10 @@ export default function App() {
                 >
                   <option value="">Choisir une formule...</option>
                   {formulas.map(f => (
-                    <option key={f.id} value={f.id}>{f.name} ({formatPrice(f.price).ht} / {formatPrice(f.price).ttc})</option>
+                    <option key={f.id} value={f.id}>
+                      {f.name} ({formatPrice(f.price).ht} / {formatPrice(f.price).ttc})
+                      {f.period === 'year' && f.almaCommission ? ` - ${formatPrice(f.price, f.almaCommission).netHt}` : ''}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -2123,6 +2352,55 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal - Date de changement de statut */}
+      {statusPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-900">Date d'effet</h3>
+              <button onClick={() => setStatusPrompt(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500 uppercase">
+                  Date {statusPrompt.newStatus === 'RESILIE' ? 'de résiliation' : statusPrompt.newStatus === 'EN_PAUSE' ? 'de mise en pause' : 'de régularisation'}
+                </label>
+                <input 
+                  type="date"
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  value={statusPrompt.date}
+                  onChange={(e) => setStatusPrompt({...statusPrompt, date: e.target.value})}
+                />
+              </div>
+              <div className="pt-2 flex gap-3">
+                <button 
+                  onClick={() => setStatusPrompt(null)}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl font-semibold transition-all"
+                >
+                  Annuler
+                </button>
+                <button 
+                  onClick={() => {
+                    handleUpdateStatus(statusPrompt.clientId, {
+                      status: statusPrompt.newStatus as any,
+                      isActive: false,
+                      deactivatedAt: new Date(statusPrompt.date).toISOString(),
+                      statusUpdatedAt: new Date().toISOString()
+                    });
+                    setStatusPrompt(null);
+                  }}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-semibold transition-all"
+                >
+                  Confirmer
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -2207,7 +2485,10 @@ export default function App() {
                   >
                     <option value="">Choisir formule...</option>
                     {formulas.map(f => (
-                      <option key={f.id} value={f.id}>{f.name} ({formatPrice(f.price).ht} / {formatPrice(f.price).ttc})</option>
+                      <option key={f.id} value={f.id}>
+                        {f.name} ({formatPrice(f.price).ht} / {formatPrice(f.price).ttc})
+                        {f.period === 'year' && f.almaCommission ? ` - ${formatPrice(f.price, f.almaCommission).netHt}` : ''}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -2221,30 +2502,44 @@ export default function App() {
                   />
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-500 uppercase">Statut</label>
-                <div className="flex gap-2">
-                  <button 
-                    type="button"
-                    onClick={() => setClientToEdit({...clientToEdit, isActive: true, deactivatedAt: null})}
-                    className={cn(
-                      "flex-1 py-2 rounded-xl text-sm font-medium border transition-all",
-                      clientToEdit.isActive ? "bg-emerald-600 border-emerald-600 text-white" : "bg-white border-slate-200 text-slate-600"
-                    )}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 uppercase">Statut</label>
+                  <select
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    value={clientToEdit.status || (clientToEdit.isActive ? 'ACTIVE' : 'RESILIE')}
+                    onChange={(e) => {
+                      const newStatus = e.target.value as any;
+                      const updates: any = { status: newStatus, statusUpdatedAt: new Date().toISOString() };
+                      if (newStatus === 'ACTIVE') {
+                        updates.isActive = true;
+                        updates.deactivatedAt = null;
+                      } else {
+                        updates.isActive = false;
+                        updates.deactivatedAt = clientToEdit.deactivatedAt || new Date().toISOString();
+                      }
+                      setClientToEdit({ ...clientToEdit, ...updates });
+                    }}
                   >
-                    Actif
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => setClientToEdit({...clientToEdit, isActive: false, deactivatedAt: new Date().toISOString()})}
-                    className={cn(
-                      "flex-1 py-2 rounded-xl text-sm font-medium border transition-all",
-                      !clientToEdit.isActive ? "bg-rose-600 border-rose-600 text-white" : "bg-white border-slate-200 text-slate-600"
-                    )}
-                  >
-                    Résilié
-                  </button>
+                    <option value="ACTIVE">Actif</option>
+                    <option value="RESILIE">Résilié</option>
+                    <option value="EN_PAUSE">En pause</option>
+                    <option value="A_REGULARISER">À régulariser</option>
+                  </select>
                 </div>
+                {(clientToEdit.status || (clientToEdit.isActive ? 'ACTIVE' : 'RESILIE')) !== 'ACTIVE' && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500 uppercase">
+                      Date {(!clientToEdit.status || clientToEdit.status === 'RESILIE') ? 'de résiliation' : clientToEdit.status === 'EN_PAUSE' ? 'de mise en pause' : 'de régularisation'}
+                    </label>
+                    <input 
+                      type="date"
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      value={clientToEdit.deactivatedAt ? clientToEdit.deactivatedAt.split('T')[0] : ''}
+                      onChange={(e) => setClientToEdit({...clientToEdit, deactivatedAt: new Date(e.target.value).toISOString()})}
+                    />
+                  </div>
+                )}
               </div>
               <div className="pt-4">
                 <button 
