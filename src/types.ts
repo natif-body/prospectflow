@@ -37,7 +37,7 @@ export interface Formula {
   id: string;
   name: string;
   price: number;
-  period: 'week' | 'month' | 'year';
+  period: 'week' | 'month' | 'year' | 'year_2x' | 'year_3x' | 'year_4x';
   almaCommission?: number; // Percentage commission for Alma (annual)
 }
 
@@ -113,6 +113,12 @@ export interface DashboardStats {
     date: string;
     prospects: number;
     signatures: number;
+    revenue: number;
+    newMembers: number;
+    showUp: number;
+    appointments: number;
+    calls: number;
+    pickups: number;
   }[];
 }
 
@@ -145,6 +151,7 @@ export interface DailyLog {
   notSigned: number;
   pending: number;
   noShow: number;
+  cancelled: number;
   digital: number;
   nonDigital: number;
 }

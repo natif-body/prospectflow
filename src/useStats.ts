@@ -104,6 +104,10 @@ export function useStats(
     let totalRevenueNetHT = 0;
     let lostRevenueTTC = 0;
     let lostRevenueHT = 0;
+    let globalMrrTTC = 0;
+    let globalMrrHT = 0;
+    let globalMrrNetTTC = 0;
+    let globalMrrNetHT = 0;
     
     let sumMonthlyTTC = 0;
     let sumMonthlyHT = 0;
@@ -119,37 +123,61 @@ export function useStats(
           // Calculate monthly equivalent for average basket
           let monthlyTTC = formula.price;
           if (formula.period === 'week') monthlyTTC = formula.price * (52 / 12);
-          if (formula.period === 'year') monthlyTTC = formula.price / 12;
+          if (formula.period.startsWith('year')) monthlyTTC = formula.price / 12;
           let monthlyHT = monthlyTTC / 1.2;
 
           // Calculate actual revenue generated in the period
           const clientStart = new Date(c.createdAt);
           const clientEnd = c.deactivatedAt ? new Date(c.deactivatedAt) : new Date();
           
-          const overlapStart = new Date(Math.max(clientStart.getTime(), periodStart.getTime()));
-          const overlapEnd = new Date(Math.min(clientEnd.getTime(), periodEnd.getTime()));
+          if (formula.period.startsWith('year')) {
+            // Annual formulas are paid on specific dates, not prorated daily
+            let installments = 1;
+            if (formula.period === 'year_2x') installments = 2;
+            if (formula.period === 'year_3x') installments = 3;
+            if (formula.period === 'year_4x') installments = 4;
 
-          if (overlapStart < overlapEnd) {
-            const daysActive = (overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24);
-            const dailyRateTTC = monthlyTTC / 30.436875;
-            const dailyRateHT = monthlyHT / 30.436875;
+            const installmentTTC = formula.price / installments;
+            const installmentHT = installmentTTC / 1.2;
             
-            let priceTTC = daysActive * dailyRateTTC;
-            let priceHT = daysActive * dailyRateHT;
-            let netPriceTTC = priceTTC;
-            let netPriceHT = priceHT;
-            
-            // Apply Alma commission for annual formulas if specified (commission is calculated on HT price)
-            if (formula.period === 'year' && formula.almaCommission) {
-              const commissionAmount = priceHT * (formula.almaCommission / 100);
-              netPriceTTC = priceTTC - commissionAmount;
-              netPriceHT = priceHT - commissionAmount;
+            let commissionPerInstallment = 0;
+            if (formula.almaCommission) {
+              const totalCommission = (formula.price / 1.2) * (formula.almaCommission / 100);
+              commissionPerInstallment = totalCommission / installments;
             }
-            
-            totalRevenueTTC += priceTTC;
-            totalRevenueHT += priceHT;
-            totalRevenueNetTTC += netPriceTTC;
-            totalRevenueNetHT += netPriceHT;
+
+            for (let i = 0; i < installments; i++) {
+              const paymentDate = new Date(clientStart);
+              paymentDate.setMonth(paymentDate.getMonth() + i);
+              
+              // Only count if payment date is within the period and before client deactivated
+              if (paymentDate >= periodStart && paymentDate <= periodEnd && paymentDate <= clientEnd) {
+                totalRevenueTTC += installmentTTC;
+                totalRevenueHT += installmentHT;
+                totalRevenueNetTTC += (installmentTTC - commissionPerInstallment);
+                totalRevenueNetHT += (installmentHT - commissionPerInstallment);
+              }
+            }
+          } else {
+            // Prorated daily for week/month formulas
+            const overlapStart = new Date(Math.max(clientStart.getTime(), periodStart.getTime()));
+            const overlapEnd = new Date(Math.min(clientEnd.getTime(), periodEnd.getTime()));
+
+            if (overlapStart < overlapEnd) {
+              const daysActive = (overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24);
+              const dailyRateTTC = monthlyTTC / 30.436875;
+              const dailyRateHT = monthlyHT / 30.436875;
+              
+              let priceTTC = daysActive * dailyRateTTC;
+              let priceHT = daysActive * dailyRateHT;
+              let netPriceTTC = priceTTC;
+              let netPriceHT = priceHT;
+              
+              totalRevenueTTC += priceTTC;
+              totalRevenueHT += priceHT;
+              totalRevenueNetTTC += netPriceTTC;
+              totalRevenueNetHT += netPriceHT;
+            }
           }
 
           // Calculate lost revenue (MRR lost) for inactive clients
@@ -167,6 +195,24 @@ export function useStats(
             sumMonthlyTTC += monthlyTTC;
             sumMonthlyHT += monthlyHT;
             signedCount++;
+          }
+
+          // Calculate Global MRR (active at the end of the period)
+          if (!startDate || !endDate || (c.createdAt <= endDate && (!c.deactivatedAt || c.deactivatedAt > endDate))) {
+            globalMrrTTC += monthlyTTC;
+            globalMrrHT += monthlyHT;
+            
+            // Calculate Net MRR
+            let netMrrTTC = monthlyTTC;
+            let netMrrHT = monthlyHT;
+            if (formula.period.startsWith('year') && formula.almaCommission) {
+              const commissionAmountTTC = monthlyTTC * (formula.almaCommission / 100);
+              const commissionAmountHT = monthlyHT * (formula.almaCommission / 100);
+              netMrrTTC -= commissionAmountTTC;
+              netMrrHT -= commissionAmountHT;
+            }
+            globalMrrNetTTC += netMrrTTC;
+            globalMrrNetHT += netMrrHT;
           }
         }
       }
@@ -186,6 +232,62 @@ export function useStats(
 
     const totalSourceContacts = manualStatsSum.contactsDigital + manualStatsSum.contactsNonDigital;
     const digitalPercentage = totalSourceContacts > 0 ? (manualStatsSum.contactsDigital / totalSourceContacts) * 100 : 0;
+
+    const dailyStatsMap = new Map<string, any>();
+
+    manualEntries.forEach(entry => {
+      const date = entry.period_start.split('T')[0];
+      if (!dailyStatsMap.has(date)) {
+        dailyStatsMap.set(date, {
+          date,
+          revenue: 0,
+          signatures: 0,
+          newMembers: 0,
+          prospects: 0,
+          showUp: 0,
+          appointments: 0,
+          calls: 0,
+          pickups: 0,
+        });
+      }
+      const day = dailyStatsMap.get(date);
+      day.signatures += entry.signed || 0;
+      day.prospects += entry.totalContacts || 0;
+      day.showUp += entry.showedUp || 0;
+      day.appointments += entry.appointmentsTaken || 0;
+      day.calls += entry.totalCalls || 0;
+      day.pickups += entry.totalPickups || 0;
+    });
+
+    clients.forEach(c => {
+      if (c.formulaId) {
+        const date = c.createdAt.split('T')[0];
+        if (!dailyStatsMap.has(date)) {
+          dailyStatsMap.set(date, {
+            date,
+            revenue: 0,
+            signatures: 0,
+            newMembers: 0,
+            prospects: 0,
+            showUp: 0,
+            appointments: 0,
+            calls: 0,
+            pickups: 0,
+          });
+        }
+        const day = dailyStatsMap.get(date);
+        day.newMembers++;
+        const formula = formulas.find(f => f.id.toString() === c.formulaId?.toString());
+        if (formula) {
+           let monthlyHT = formula.price / 1.2;
+           if (formula.period === 'week') monthlyHT = (formula.price * (52 / 12)) / 1.2;
+           if (formula.period.startsWith('year')) monthlyHT = (formula.price / 12) / 1.2;
+           day.revenue += monthlyHT; // Approximate MRR added that day
+        }
+      }
+    });
+
+    const dailyStats = Array.from(dailyStatsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
 
     return {
       totalContacts: manualStatsSum.totalContacts,
@@ -213,6 +315,10 @@ export function useStats(
       totalRevenueNetHT,
       lostRevenueTTC,
       lostRevenueHT,
+      globalMrrTTC,
+      globalMrrHT,
+      globalMrrNetTTC,
+      globalMrrNetHT,
       averageBasketTTC,
       averageBasketHT,
       showUpRate,
@@ -236,7 +342,7 @@ export function useStats(
       totalAdherentsAndNonClients,
       totalDecisions,
       totalAppointments,
-      dailyStats: [] // Simplified for now
+      dailyStats
     };
   }, [clients, formulas, manualStats, startDate, endDate]);
 }

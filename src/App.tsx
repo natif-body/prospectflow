@@ -30,7 +30,15 @@ import {
   Edit2,
   Check,
   Phone,
-  Mail
+  Mail,
+  GripHorizontal,
+  BarChart2,
+  LineChart as LineChartIcon,
+  Hash,
+  Maximize2,
+  Minimize2,
+  Settings,
+  RotateCcw
 } from 'lucide-react';
 import { 
   PieChart, 
@@ -40,6 +48,8 @@ import {
   Tooltip as RechartsTooltip,
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid
@@ -48,6 +58,9 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { motion } from 'motion/react';
 import Papa from 'papaparse';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { cn } from './lib/utils';
 import { 
   Client, 
@@ -65,6 +78,246 @@ import { useFirebase, OperationType, handleFirestoreError } from './useFirebase'
 import { useStats } from './useStats';
 import { db, auth } from './firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, writeBatch } from 'firebase/firestore';
+
+// --- Dashboard Customization Types ---
+export type WidgetId = 'contacts' | 'digital' | 'tauxRdv' | 'tauxShowUp' | 'tauxClosing' | 'caVente' | 'caGlobal' | 'perteMmr' | 'rdvVenus' | 'rdvNonHonores' | 'rdvAnnules' | 'totalAdherentsClients' | 'totalAdherents' | 'totalClients' | 'nouveauxAdherents' | 'signatures' | 'panierMoyen' | 'tauxDecroche' | 'resilies' | 'enPause' | 'aRegulariser';
+export type WidgetDisplayType = 'number' | 'bar' | 'line';
+export type WidgetSize = 'small' | 'medium' | 'large';
+
+export interface WidgetConfig {
+  id: WidgetId;
+  type: WidgetDisplayType;
+  size: WidgetSize;
+}
+
+const DEFAULT_DASHBOARD_LAYOUT: WidgetConfig[] = [
+  { id: 'caGlobal', type: 'number', size: 'medium' },
+  { id: 'caVente', type: 'number', size: 'medium' },
+  { id: 'perteMmr', type: 'number', size: 'medium' },
+  { id: 'contacts', type: 'number', size: 'small' },
+  { id: 'tauxRdv', type: 'number', size: 'small' },
+  { id: 'tauxShowUp', type: 'number', size: 'small' },
+  { id: 'tauxClosing', type: 'number', size: 'small' },
+  { id: 'rdvVenus', type: 'number', size: 'small' },
+  { id: 'rdvNonHonores', type: 'number', size: 'small' },
+  { id: 'rdvAnnules', type: 'number', size: 'small' },
+  { id: 'totalAdherentsClients', type: 'number', size: 'small' },
+  { id: 'totalAdherents', type: 'number', size: 'small' },
+  { id: 'totalClients', type: 'number', size: 'small' },
+  { id: 'nouveauxAdherents', type: 'number', size: 'small' },
+  { id: 'signatures', type: 'number', size: 'small' },
+  { id: 'panierMoyen', type: 'number', size: 'small' },
+  { id: 'tauxDecroche', type: 'number', size: 'small' },
+  { id: 'resilies', type: 'number', size: 'small' },
+  { id: 'enPause', type: 'number', size: 'small' },
+  { id: 'aRegulariser', type: 'number', size: 'small' },
+];
+
+function SortableWidget({ id, children, size, isEditMode }: any) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : 1,
+  };
+
+  const colSpan = size === 'large' ? 'col-span-1 md:col-span-2 lg:col-span-4' : size === 'medium' ? 'col-span-1 md:col-span-2 lg:col-span-2' : 'col-span-1 md:col-span-1 lg:col-span-1';
+
+  return (
+    <div ref={setNodeRef} style={style} className={cn(colSpan, "relative group h-full")}>
+      {isEditMode && (
+        <div 
+          {...attributes} 
+          {...listeners}
+          className="absolute -top-3 -left-3 z-20 p-2 bg-white rounded-full shadow-lg cursor-grab active:cursor-grabbing border border-slate-200 text-slate-400 hover:text-indigo-600 transition-colors"
+        >
+          <GripHorizontal className="w-5 h-5" />
+        </div>
+      )}
+      <div className={cn("h-full", isEditMode && "ring-2 ring-transparent group-hover:ring-indigo-500/50 rounded-2xl transition-all", isDragging && "opacity-50")}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function WidgetRenderer({ config, stats, onUpdate, isEditMode, basketPeriod, setBasketPeriod, showNetRevenue, setShowNetRevenue }: any) {
+  const { id, type, size } = config;
+
+  const dataMap: Record<WidgetId, any> = {
+    contacts: { title: 'Total Contact', value: stats.totalContacts, icon: Users, color: 'bg-blue-50 text-blue-600', dataKey: 'prospects' },
+    digital: { title: 'Digital', value: `${stats.digitalPercentage.toFixed(1)}%`, bottomText: `${stats.contactsDigital} / ${stats.contactsDigital + stats.contactsNonDigital}`, icon: TrendingUp, color: 'bg-cyan-50 text-cyan-600' },
+    tauxRdv: { title: 'Taux RDV', value: `${stats.appointmentRate.toFixed(1)}%`, bottomText: `${stats.appointmentsTaken} / ${stats.totalContacts}`, icon: Calendar, color: 'bg-indigo-50 text-indigo-600', dataKey: 'appointments' },
+    tauxShowUp: { title: 'Taux de show', value: `${stats.showUpRate.toFixed(1)}%`, bottomText: `${stats.attendance.showedUp} / ${stats.totalAppointments}`, icon: UserCheck, color: 'bg-emerald-50 text-emerald-600', dataKey: 'showUp' },
+    tauxClosing: { title: 'Taux Closing', value: `${stats.closingRate.toFixed(1)}%`, bottomText: `${stats.signatures} / ${stats.totalDecisions}`, icon: CheckCircle2, color: 'bg-violet-50 text-violet-600' },
+    caGlobal: {
+      title: showNetRevenue ? "CA Global (Net)" : "CA Global",
+      value: formatExactPrice(showNetRevenue ? stats.globalMrrNetHT : stats.globalMrrHT, showNetRevenue ? stats.globalMrrNetTTC : stats.globalMrrTTC).ht,
+      subValue: formatExactPrice(showNetRevenue ? stats.globalMrrNetHT : stats.globalMrrHT, showNetRevenue ? stats.globalMrrNetTTC : stats.globalMrrTTC).ttc,
+      icon: TrendingUp,
+      color: showNetRevenue ? "bg-emerald-600 text-white" : "bg-blue-600 text-white",
+      onClick: () => setShowNetRevenue(!showNetRevenue)
+    },
+    caVente: { 
+      title: showNetRevenue ? "CA Vente (Net)" : "CA Vente", 
+      value: formatExactPrice(showNetRevenue ? stats.totalRevenueNetHT : stats.totalRevenueHT, showNetRevenue ? stats.totalRevenueNetTTC : stats.totalRevenueTTC).ht,
+      subValue: formatExactPrice(showNetRevenue ? stats.totalRevenueNetHT : stats.totalRevenueHT, showNetRevenue ? stats.totalRevenueNetTTC : stats.totalRevenueTTC).ttc,
+      icon: TrendingUp, 
+      color: showNetRevenue ? "bg-emerald-600 text-white" : "bg-indigo-600 text-white",
+      dataKey: 'revenue',
+      onClick: () => setShowNetRevenue(!showNetRevenue)
+    },
+    perteMmr: { title: 'Perte Potentielle (MRR)', value: formatExactPrice(stats.lostRevenueHT, stats.lostRevenueTTC).ht, subValue: formatExactPrice(stats.lostRevenueHT, stats.lostRevenueTTC).ttc, icon: TrendingDown, color: 'bg-rose-600 text-white' },
+    rdvVenus: { title: 'RDV Venus', value: stats.attendance.showedUp, icon: UserCheck, color: 'bg-emerald-50 text-emerald-600' },
+    rdvNonHonores: { title: 'RDV Non Honorés', value: stats.attendance.noShow, icon: Ban, color: 'bg-rose-50 text-rose-600' },
+    rdvAnnules: { title: 'RDV Annulés', value: stats.attendance.cancelled, icon: XCircle, color: 'bg-slate-100 text-slate-600' },
+    totalAdherentsClients: { title: 'Total Adhérents + Clients', value: stats.totalAdherentsAndNonClients, icon: Users, color: 'bg-blue-50 text-blue-600' },
+    totalAdherents: { title: 'Total Adhérents', value: stats.totalAdherents, icon: UserCheck, color: 'bg-indigo-50 text-indigo-600' },
+    totalClients: { title: 'Total Clients (sans formule)', value: stats.totalClients, icon: UserCheck, color: 'bg-slate-100 text-slate-600' },
+    nouveauxAdherents: { title: 'Nouveaux Adhérents', value: stats.newMembersNet > 0 ? `+${stats.newMembersNet}` : stats.newMembersNet, bottomText: `+${stats.newMembersTotal} / -${stats.cancelledMembers}`, icon: Users, color: 'bg-emerald-50 text-emerald-600', dataKey: 'newMembers' },
+    signatures: { title: 'Signatures', value: stats.signatures, icon: CheckCircle2, color: 'bg-violet-50 text-violet-600', dataKey: 'signatures' },
+    panierMoyen: { 
+      title: `Panier Moyen (${basketPeriod === 'week' ? 'Sem' : basketPeriod === 'month' ? 'Mois' : 'An'})`, 
+      value: formatExactPrice(stats.averageBasketHT * (basketPeriod === 'week' ? 12/52 : basketPeriod === 'year' ? 12 : 1), stats.averageBasketTTC * (basketPeriod === 'week' ? 12/52 : basketPeriod === 'year' ? 12 : 1)).ht,
+      subValue: formatExactPrice(stats.averageBasketHT * (basketPeriod === 'week' ? 12/52 : basketPeriod === 'year' ? 12 : 1), stats.averageBasketTTC * (basketPeriod === 'week' ? 12/52 : basketPeriod === 'year' ? 12 : 1)).ttc,
+      icon: TrendingUp, 
+      color: 'bg-amber-50 text-amber-600',
+      onClick: () => {
+        const next: Record<string, 'week' | 'month' | 'year'> = { month: 'year', year: 'week', week: 'month' };
+        setBasketPeriod(next[basketPeriod]);
+      }
+    },
+    tauxDecroche: { title: 'Taux Décroché', value: `${stats.pickupRate.toFixed(1)}%`, bottomText: `${stats.totalPickups} / ${stats.totalCalls}`, icon: Phone, color: 'bg-indigo-50 text-indigo-600', dataKey: 'pickups' },
+    resilies: { title: 'Résiliés', value: `${stats.cancelledPercentage.toFixed(1)}%`, bottomText: `${stats.totalCancelled} adhérents`, icon: Ban, color: 'bg-rose-50 text-rose-600' },
+    enPause: { title: 'En Pause', value: `${stats.pausedPercentage.toFixed(1)}%`, bottomText: `${stats.pausedMembers} adhérents`, icon: Clock, color: 'bg-amber-50 text-amber-600' },
+    aRegulariser: { title: 'À Régulariser', value: `${stats.regulariserPercentage.toFixed(1)}%`, bottomText: `${stats.regulariserMembers} adhérents`, icon: AlertCircle, color: 'bg-orange-50 text-orange-600' },
+  };
+
+  const widgetData = dataMap[id as WidgetId];
+  if (!widgetData) return null;
+
+  const hasChartData = !!widgetData.dataKey;
+
+  return (
+    <div className="h-full flex flex-col relative group">
+      {isEditMode && (
+        <div className="absolute top-2 right-2 z-30 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm p-1 rounded-lg shadow-sm border border-slate-200">
+          {hasChartData && (
+            <>
+              <button onClick={() => onUpdate({ ...config, type: 'number' })} className={cn("p-1.5 rounded-md", type === 'number' ? "bg-indigo-100 text-indigo-600" : "hover:bg-slate-100 text-slate-500")} title="Nombre">
+                <Hash className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => onUpdate({ ...config, type: 'bar' })} className={cn("p-1.5 rounded-md", type === 'bar' ? "bg-indigo-100 text-indigo-600" : "hover:bg-slate-100 text-slate-500")} title="Barres">
+                <BarChart2 className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => onUpdate({ ...config, type: 'line' })} className={cn("p-1.5 rounded-md", type === 'line' ? "bg-indigo-100 text-indigo-600" : "hover:bg-slate-100 text-slate-500")} title="Ligne">
+                <LineChartIcon className="w-3.5 h-3.5" />
+              </button>
+              <div className="w-px h-4 bg-slate-200 my-auto mx-1" />
+            </>
+          )}
+          <button onClick={() => onUpdate({ ...config, size: size === 'small' ? 'medium' : size === 'medium' ? 'large' : 'small' })} className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500" title="Taille">
+            {size === 'small' ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+      )}
+
+      <div 
+        className={cn("glass-card p-6 flex flex-col gap-4 h-full", widgetData.onClick && !isEditMode && "cursor-pointer transition-transform active:scale-95")}
+        onClick={!isEditMode ? widgetData.onClick : undefined}
+      >
+        <div className="flex justify-between items-start">
+          <div className={cn("p-2 rounded-xl", widgetData.color)}>
+            <widgetData.icon className="w-5 h-5" />
+          </div>
+          {widgetData.trend && (
+            <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full flex items-center gap-1">
+              <ArrowUpRight className="w-3 h-3" />
+              {widgetData.trend}
+            </span>
+          )}
+        </div>
+        
+        {type === 'number' || !hasChartData ? (
+          <div className="flex-1 flex flex-col justify-end">
+            <p className="text-sm font-medium text-slate-500">{widgetData.title}</p>
+            <h3 className="text-2xl font-bold text-slate-900 mt-1">{widgetData.value}</h3>
+            {widgetData.subValue && <p className="text-sm font-medium text-slate-500 mt-1">{widgetData.subValue}</p>}
+            {widgetData.bottomText && <p className="text-xs font-medium text-slate-400 mt-2">{widgetData.bottomText}</p>}
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col min-h-[150px]">
+            <div className="mb-2">
+              <p className="text-sm font-medium text-slate-500">{widgetData.title}</p>
+              <h3 className="text-lg font-bold text-slate-900">{widgetData.value}</h3>
+            </div>
+            <div className="flex-1 w-full h-full min-h-[100px]">
+              <ResponsiveContainer width="100%" height="100%">
+                {type === 'bar' ? (
+                  <BarChart data={stats.dailyStats}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="date" tickFormatter={(val) => format(new Date(val), 'dd/MM')} fontSize={10} tickLine={false} axisLine={false} />
+                    <YAxis fontSize={10} tickLine={false} axisLine={false} />
+                    <RechartsTooltip 
+                      labelFormatter={(val) => format(new Date(val), 'dd MMMM yyyy', { locale: fr })}
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    />
+                    <Bar dataKey={widgetData.dataKey} fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                ) : (
+                  <LineChart data={stats.dailyStats}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="date" tickFormatter={(val) => format(new Date(val), 'dd/MM')} fontSize={10} tickLine={false} axisLine={false} />
+                    <YAxis fontSize={10} tickLine={false} axisLine={false} />
+                    <RechartsTooltip 
+                      labelFormatter={(val) => format(new Date(val), 'dd MMMM yyyy', { locale: fr })}
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    />
+                    <Line type="monotone" dataKey={widgetData.dataKey} stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                  </LineChart>
+                )}
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const formatPrice = (priceTTC: number, almaCommission?: number) => {
+  const priceHT = priceTTC / 1.2;
+  let netHT = priceHT;
+  let netTTC = priceTTC;
+
+  if (almaCommission) {
+    const commissionAmount = priceHT * (almaCommission / 100);
+    netHT = priceHT - commissionAmount;
+    netTTC = priceTTC - commissionAmount;
+  }
+
+  return {
+    ttc: `${priceTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ TTC`,
+    ht: `${priceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ HT`,
+    netTtc: `${netTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ TTC (Net)`,
+    netHt: `${netHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ HT (Net)`
+  };
+};
+
+const formatExactPrice = (priceHT: number, priceTTC: number) => {
+  return {
+    ttc: `${priceTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ TTC`,
+    ht: `${priceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ HT`
+  };
+};
 
 // --- Components ---
 
@@ -91,32 +344,6 @@ export default function App() {
       </div>
     </div>
   );
-
-  const formatPrice = (priceTTC: number, almaCommission?: number) => {
-    const priceHT = priceTTC / 1.2;
-    let netHT = priceHT;
-    let netTTC = priceTTC;
-
-    if (almaCommission) {
-      const commissionAmount = priceHT * (almaCommission / 100);
-      netHT = priceHT - commissionAmount;
-      netTTC = priceTTC - commissionAmount;
-    }
-
-    return {
-      ttc: `${priceTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ TTC`,
-      ht: `${priceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ HT`,
-      netTtc: `${netTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ TTC (Net)`,
-      netHt: `${netHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ HT (Net)`
-    };
-  };
-
-  const formatExactPrice = (priceHT: number, priceTTC: number) => {
-    return {
-      ttc: `${priceTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ TTC`,
-      ht: `${priceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ HT`
-    };
-  };
 
   const AttendanceChart = ({ data, title, colors }: { data: any[], title: string, colors: string[] }) => {
     if (!data || data.length === 0) return <div className="h-[240px] flex items-center justify-center text-slate-400 text-sm">Pas de données</div>;
@@ -219,9 +446,33 @@ export default function App() {
     endDate: ''
   });
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
   const stats = useStats(clients, formulas, manualStats, dateRange.startDate, dateRange.endDate);
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'relances' | 'settings'>('dashboard');
+  const [showArchivedRelances, setShowArchivedRelances] = useState(false);
+  const [isDashboardEditMode, setIsDashboardEditMode] = useState(false);
+  const [dashboardLayout, setDashboardLayout] = useState<WidgetConfig[]>(() => {
+    const saved = localStorage.getItem('dashboardLayout');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const missing = DEFAULT_DASHBOARD_LAYOUT.filter(d => !parsed.find((p: any) => p.id === d.id));
+        return [...parsed, ...missing];
+      } catch (e) {
+        return DEFAULT_DASHBOARD_LAYOUT;
+      }
+    }
+    return DEFAULT_DASHBOARD_LAYOUT;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('dashboardLayout', JSON.stringify(dashboardLayout));
+  }, [dashboardLayout]);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -254,7 +505,7 @@ export default function App() {
   const [isFormulaModalOpen, setIsFormulaModalOpen] = useState(false);
   const [formulaToEdit, setFormulaToEdit] = useState<Formula | null>(null);
   const [formulaSort, setFormulaSort] = useState<'name' | 'price-asc' | 'price-desc' | 'period'>('name');
-  const [newFormula, setNewFormula] = useState<{ name: string; price: number; period: 'week' | 'month' | 'year'; almaCommission?: number }>({ 
+  const [newFormula, setNewFormula] = useState<{ name: string; price: number; period: 'week' | 'month' | 'year' | 'year_2x' | 'year_3x' | 'year_4x'; almaCommission?: number }>({ 
     name: '', 
     price: 0, 
     period: 'month',
@@ -420,9 +671,9 @@ export default function App() {
     });
   };
 
-  const calculateMonthlyRevenue = (price: number, period: 'week' | 'month' | 'year') => {
+  const calculateMonthlyRevenue = (price: number, period: 'week' | 'month' | 'year' | 'year_2x' | 'year_3x' | 'year_4x') => {
     if (period === 'week') return (price * 52) / 12;
-    if (period === 'year') return price / 12;
+    if (period.startsWith('year')) return price / 12;
     return price;
   };
 
@@ -585,6 +836,17 @@ export default function App() {
       setClientToEdit(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `clients/${clientToEdit.id}`);
+    }
+  };
+
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event;
+    if (active.id !== over.id) {
+      setDashboardLayout((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
     }
   };
 
@@ -892,8 +1154,8 @@ export default function App() {
         case 'price-desc':
           return b.price - a.price;
         case 'period':
-          const periodOrder = { week: 1, month: 2, year: 3 };
-          return periodOrder[a.period] - periodOrder[b.period];
+          const periodOrder: Record<string, number> = { week: 1, month: 2, year: 3, year_2x: 4, year_3x: 5, year_4x: 6 };
+          return (periodOrder[a.period] || 99) - (periodOrder[b.period] || 99);
         default:
           return 0;
       }
@@ -911,7 +1173,10 @@ export default function App() {
 
     const formula = formulas.find(f => f.id.toString() === p.formulaId?.toString());
     const matchesPeriod = formulaPeriodFilter === 'all' || 
-      (formula && formula.period === formulaPeriodFilter);
+      (formula && (
+        formula.period === formulaPeriodFilter || 
+        (formulaPeriodFilter === 'year' && formula.period.startsWith('year'))
+      ));
 
     const currentStatus = p.status || (p.isActive ? 'ACTIVE' : 'RESILIE');
     const matchesStatus = statusFilter === 'all' || 
@@ -1001,6 +1266,8 @@ export default function App() {
     { name: 'Prospect', value: stats.appointmentSources.prospect },
     { name: 'Setter', value: stats.appointmentSources.setter },
   ].filter(d => d.value > 0) : [];
+
+  const displayedRelances = relances.filter(r => showArchivedRelances ? r.status !== 'PENDING' : r.status === 'PENDING');
 
   if (loading || !isAuthReady) {
     return (
@@ -1167,6 +1434,35 @@ export default function App() {
             )}
           </div>
           <div className="flex items-center gap-4">
+            {activeTab === 'dashboard' && (
+              <div className="hidden md:flex items-center gap-2">
+                {isDashboardEditMode && (
+                  <button 
+                    onClick={() => {
+                      if (window.confirm('Voulez-vous vraiment réinitialiser la disposition du tableau de bord ?')) {
+                        setDashboardLayout(DEFAULT_DASHBOARD_LAYOUT);
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm border bg-white text-rose-600 border-rose-200 hover:bg-rose-50"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Réinitialiser
+                  </button>
+                )}
+                <button 
+                  onClick={() => setIsDashboardEditMode(!isDashboardEditMode)}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm border",
+                    isDashboardEditMode 
+                      ? "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700" 
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                  )}
+                >
+                  {isDashboardEditMode ? <Check className="w-4 h-4" /> : <Settings className="w-4 h-4" />}
+                  {isDashboardEditMode ? 'Terminer' : 'Personnaliser'}
+                </button>
+              </div>
+            )}
             {showDatePicker && (
               <div className="flex items-center gap-2 bg-white border border-slate-200 p-1 rounded-xl shadow-sm">
                 <input 
@@ -1202,6 +1498,7 @@ export default function App() {
                   notSigned: 0,
                   pending: 0,
                   noShow: 0,
+                  cancelled: 0,
                   digital: 0,
                   nonDigital: 0
                 });
@@ -1218,7 +1515,7 @@ export default function App() {
                 const dateStr = now.toISOString().split('T')[0];
                 setEditingManualStats({
                   period_start: dateStr,
-                  period_type: 'day',
+                  period_type: 'week',
                   totalContacts: 0,
                   contactsDigital: 0,
                   contactsNonDigital: 0,
@@ -1310,177 +1607,32 @@ export default function App() {
                 </motion.div>
               )}
               {/* Stats Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
-                <StatCard 
-                  title="Total Contact" 
-                  value={stats.totalContacts} 
-                  icon={Users} 
-                  color="bg-blue-50 text-blue-600"
-                />
-                <StatCard 
-                  title="Digital" 
-                  value={`${stats.digitalPercentage.toFixed(1)}%`} 
-                  icon={TrendingUp} 
-                  color="bg-cyan-50 text-cyan-600"
-                />
-                <StatCard 
-                  title="Taux RDV" 
-                  value={`${stats.appointmentRate.toFixed(1)}%`} 
-                  bottomText={`${stats.appointmentsTaken} / ${stats.totalContacts}`}
-                  icon={Calendar} 
-                  color="bg-indigo-50 text-indigo-600"
-                />
-                <StatCard 
-                  title="Taux Show-up" 
-                  value={`${stats.showUpRate.toFixed(1)}%`} 
-                  bottomText={`${stats.attendance.showedUp} / ${stats.totalAppointments}`}
-                  icon={UserCheck} 
-                  color="bg-emerald-50 text-emerald-600"
-                />
-                <StatCard 
-                  title="Taux Closing" 
-                  value={`${stats.closingRate.toFixed(1)}%`} 
-                  bottomText={`${stats.signatures} / ${stats.totalDecisions}`}
-                  icon={CheckCircle2} 
-                  color="bg-violet-50 text-violet-600"
-                />
-                <div 
-                  className="cursor-pointer transition-transform active:scale-95"
-                  onClick={() => setShowNetRevenue(!showNetRevenue)}
-                >
-                  <StatCard 
-                    title={showNetRevenue ? "CA Vente (Net)" : "CA Vente"} 
-                    value={formatExactPrice(
-                      showNetRevenue ? stats.totalRevenueNetHT : stats.totalRevenueHT, 
-                      showNetRevenue ? stats.totalRevenueNetTTC : stats.totalRevenueTTC
-                    ).ht} 
-                    subValue={formatExactPrice(
-                      showNetRevenue ? stats.totalRevenueNetHT : stats.totalRevenueHT, 
-                      showNetRevenue ? stats.totalRevenueNetTTC : stats.totalRevenueTTC
-                    ).ttc}
-                    icon={TrendingUp} 
-                    color={showNetRevenue ? "bg-emerald-600 text-white" : "bg-indigo-600 text-white"}
-                  />
-                </div>
-                <StatCard 
-                  title="Perte Potentielle (MRR)" 
-                  value={formatExactPrice(stats.lostRevenueHT, stats.lostRevenueTTC).ht} 
-                  subValue={formatExactPrice(stats.lostRevenueHT, stats.lostRevenueTTC).ttc}
-                  icon={TrendingDown} 
-                  color="bg-rose-600 text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 md:gap-6">
-                <StatCard 
-                  title="RDV Venus" 
-                  value={stats.attendance.showedUp} 
-                  icon={UserCheck} 
-                  color="bg-emerald-50 text-emerald-600"
-                />
-                <StatCard 
-                  title="RDV Non Honorés" 
-                  value={stats.attendance.noShow} 
-                  icon={Ban} 
-                  color="bg-rose-50 text-rose-600"
-                />
-                <StatCard 
-                  title="RDV Annulés" 
-                  value={stats.attendance.cancelled} 
-                  icon={XCircle} 
-                  color="bg-slate-100 text-slate-600"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
-                <StatCard 
-                  title="Total Adhérents + Clients" 
-                  value={stats.totalAdherentsAndNonClients} 
-                  icon={Users} 
-                  color="bg-blue-50 text-blue-600"
-                />
-                <StatCard 
-                  title="Total Adhérents" 
-                  value={stats.totalAdherents} 
-                  icon={UserCheck} 
-                  color="bg-indigo-50 text-indigo-600"
-                />
-                <StatCard 
-                  title="Total Clients (sans formule)" 
-                  value={stats.totalClients} 
-                  icon={UserCheck} 
-                  color="bg-slate-100 text-slate-600"
-                />
-                <StatCard 
-                  title="Nouveaux Adhérents" 
-                  value={stats.newMembersNet > 0 ? `+${stats.newMembersNet}` : stats.newMembersNet} 
-                  bottomText={`+${stats.newMembersTotal} / -${stats.cancelledMembers}`}
-                  icon={Users} 
-                  color="bg-emerald-50 text-emerald-600"
-                />
-                <StatCard 
-                  title="Signatures" 
-                  value={stats.signatures} 
-                  icon={CheckCircle2} 
-                  color="bg-violet-50 text-violet-600"
-                />
-                <div 
-                  className="cursor-pointer transition-transform active:scale-95"
-                  onClick={() => {
-                    const next: Record<string, 'week' | 'month' | 'year'> = {
-                      month: 'year',
-                      year: 'week',
-                      week: 'month'
-                    };
-                    setBasketPeriod(next[basketPeriod]);
-                  }}
-                >
-                  <StatCard 
-                    title={`Panier Moyen (${basketPeriod === 'week' ? 'Sem' : basketPeriod === 'month' ? 'Mois' : 'An'})`} 
-                    value={formatExactPrice(
-                      stats.averageBasketHT * (basketPeriod === 'week' ? 12/52 : basketPeriod === 'year' ? 12 : 1),
-                      stats.averageBasketTTC * (basketPeriod === 'week' ? 12/52 : basketPeriod === 'year' ? 12 : 1)
-                    ).ht} 
-                    subValue={formatExactPrice(
-                      stats.averageBasketHT * (basketPeriod === 'week' ? 12/52 : basketPeriod === 'year' ? 12 : 1),
-                      stats.averageBasketTTC * (basketPeriod === 'week' ? 12/52 : basketPeriod === 'year' ? 12 : 1)
-                    ).ttc}
-                    icon={TrendingUp} 
-                    color="bg-amber-50 text-amber-600"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 md:gap-6">
-                <StatCard 
-                  title="Taux Décroché" 
-                  value={`${stats.pickupRate.toFixed(1)}%`} 
-                  bottomText={`${stats.totalPickups} / ${stats.totalCalls}`}
-                  icon={Clock} 
-                  color="bg-indigo-50 text-indigo-600"
-                />
-                <StatCard 
-                  title="Résiliés" 
-                  value={`${stats.cancelledPercentage.toFixed(1)}%`} 
-                  bottomText={`${stats.totalCancelled} adhérents`}
-                  icon={Ban} 
-                  color="bg-rose-50 text-rose-600"
-                />
-                <StatCard 
-                  title="En Pause" 
-                  value={`${stats.pausedPercentage.toFixed(1)}%`} 
-                  bottomText={`${stats.pausedMembers} adhérents`}
-                  icon={Clock} 
-                  color="bg-amber-50 text-amber-600"
-                />
-                <StatCard 
-                  title="À Régulariser" 
-                  value={`${stats.regulariserPercentage.toFixed(1)}%`} 
-                  bottomText={`${stats.regulariserMembers} adhérents`}
-                  icon={TrendingUp} 
-                  color="bg-orange-50 text-orange-600"
-                />
-              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext items={dashboardLayout.map(w => w.id)} strategy={rectSortingStrategy}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 auto-rows-[140px] md:auto-rows-[160px]">
+                    {dashboardLayout.map((widget) => (
+                      <SortableWidget key={widget.id} id={widget.id} size={widget.size} isEditMode={isDashboardEditMode}>
+                        <WidgetRenderer 
+                          config={widget} 
+                          stats={stats} 
+                          isEditMode={isDashboardEditMode}
+                          onUpdate={(newConfig: WidgetConfig) => {
+                            setDashboardLayout(prev => prev.map(w => w.id === widget.id ? newConfig : w));
+                          }}
+                          basketPeriod={basketPeriod}
+                          setBasketPeriod={setBasketPeriod}
+                          showNetRevenue={showNetRevenue}
+                          setShowNetRevenue={setShowNetRevenue}
+                        />
+                      </SortableWidget>
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Attendance Chart */}
@@ -1604,6 +1756,7 @@ export default function App() {
                                   notSigned: 0,
                                   pending: 0,
                                   noShow: 0,
+                                  cancelled: 0,
                                   digital: 0,
                                   nonDigital: 0
                                 });
@@ -1873,25 +2026,51 @@ export default function App() {
                   <h3 className="text-xl font-bold text-slate-800">Relances Programmées</h3>
                   <p className="text-sm text-slate-500">Gérez vos appels de suivi pour les prospects en attente</p>
                 </div>
-                <button 
-                  onClick={() => setIsRelanceModalOpen(true)}
-                  className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl font-medium transition-colors flex items-center gap-2 shadow-lg shadow-amber-500/20"
-                >
-                  <Plus className="w-4 h-4" />
-                  À rappeler avant
-                </button>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center bg-slate-100 p-1 rounded-xl">
+                    <button
+                      onClick={() => setShowArchivedRelances(false)}
+                      className={cn(
+                        "px-4 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                        !showArchivedRelances ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                      )}
+                    >
+                      En cours
+                    </button>
+                    <button
+                      onClick={() => setShowArchivedRelances(true)}
+                      className={cn(
+                        "px-4 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                        showArchivedRelances ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                      )}
+                    >
+                      Archivées
+                    </button>
+                  </div>
+                  <button 
+                    onClick={() => setIsRelanceModalOpen(true)}
+                    className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl font-medium transition-colors flex items-center gap-2 shadow-lg shadow-amber-500/20"
+                  >
+                    <Plus className="w-4 h-4" />
+                    À rappeler avant
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {relances.length === 0 ? (
+                {displayedRelances.length === 0 ? (
                   <div className="col-span-full p-12 text-center bg-white rounded-2xl border border-slate-200">
                     <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4">
                       <Clock className="w-6 h-6 text-amber-500" />
                     </div>
-                    <p className="text-slate-500 text-sm">Aucune relance programmée</p>
+                    <p className="text-slate-500 text-sm">{showArchivedRelances ? "Aucune relance archivée" : "Aucune relance programmée"}</p>
                   </div>
                 ) : (
-                  relances.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()).map(relance => {
+                  displayedRelances.sort((a, b) => {
+                    const timeA = new Date(a.dueDate).getTime();
+                    const timeB = new Date(b.dueDate).getTime();
+                    return showArchivedRelances ? timeB - timeA : timeA - timeB;
+                  }).map(relance => {
                     const now = new Date();
                     now.setHours(0, 0, 0, 0);
                     
@@ -2025,6 +2204,46 @@ export default function App() {
                             </button>
                           </div>
                         )}
+
+                        {relance.status !== 'PENDING' && (
+                          <div className="flex flex-col gap-2 pt-4 border-t border-slate-100">
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={async () => {
+                                  try {
+                                    await updateDoc(doc(db, 'relances', relance.id.toString()), { 
+                                      status: 'PENDING',
+                                      statusJ1: 'PENDING',
+                                      statusJourJ: 'PENDING'
+                                    });
+                                  } catch (error) {
+                                    handleFirestoreError(error, OperationType.UPDATE, `relances/${relance.id}`);
+                                  }
+                                }}
+                                className="flex-1 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                Restaurer
+                              </button>
+                              <button 
+                                onClick={async () => {
+                                  showConfirm('Supprimer', 'Voulez-vous vraiment supprimer définitivement cette relance ?', async () => {
+                                    try {
+                                      await deleteDoc(doc(db, 'relances', relance.id.toString()));
+                                      setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                                    } catch (error) {
+                                      handleFirestoreError(error, OperationType.DELETE, `relances/${relance.id}`);
+                                    }
+                                  });
+                                }}
+                                className="flex-1 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Supprimer
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -2071,12 +2290,12 @@ export default function App() {
                             <div>
                               <p className="font-bold text-slate-900">{f.name}</p>
                               <p className="text-2xl font-bold text-indigo-600 mt-1">
-                                {formatPrice(f.price).ht} <span className="text-xs text-slate-400 font-normal">/ {f.period === 'week' ? 'semaine' : f.period === 'month' ? 'mois' : 'an'}</span>
+                                {formatPrice(f.price).ht} <span className="text-xs text-slate-400 font-normal">/ {f.period === 'week' ? 'semaine' : f.period === 'month' ? 'mois' : f.period === 'year_2x' ? 'an (2x)' : f.period === 'year_3x' ? 'an (3x)' : f.period === 'year_4x' ? 'an (4x)' : 'an'}</span>
                               </p>
                               <p className="text-xs text-slate-400 font-medium">
                                 {formatPrice(f.price).ttc}
                               </p>
-                              {f.period === 'year' && f.almaCommission && (
+                              {f.period.startsWith('year') && f.almaCommission && (
                                 <p className="text-xs text-emerald-600 font-bold mt-1">
                                   Net HT : {((f.price / 1.2) - ((f.price / 1.2) * (f.almaCommission / 100))).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ HT
                                 </p>
@@ -2329,7 +2548,7 @@ export default function App() {
                   {formulas.map(f => (
                     <option key={f.id} value={f.id}>
                       {f.name} ({formatPrice(f.price).ht} / {formatPrice(f.price).ttc})
-                      {f.period === 'year' && f.almaCommission ? ` - ${formatPrice(f.price, f.almaCommission).netHt}` : ''}
+                      {f.period.startsWith('year') && f.almaCommission ? ` - ${formatPrice(f.price, f.almaCommission).netHt}` : ''}
                     </option>
                   ))}
                 </select>
@@ -2487,7 +2706,7 @@ export default function App() {
                     {formulas.map(f => (
                       <option key={f.id} value={f.id}>
                         {f.name} ({formatPrice(f.price).ht} / {formatPrice(f.price).ttc})
-                        {f.period === 'year' && f.almaCommission ? ` - ${formatPrice(f.price, f.almaCommission).netHt}` : ''}
+                        {f.period.startsWith('year') && f.almaCommission ? ` - ${formatPrice(f.price, f.almaCommission).netHt}` : ''}
                       </option>
                     ))}
                   </select>
@@ -2753,10 +2972,13 @@ export default function App() {
                   >
                     <option value="week">/ Semaine</option>
                     <option value="month">/ Mois</option>
-                    <option value="year">/ An (Alma)</option>
+                    <option value="year">/ An (1x)</option>
+                    <option value="year_2x">/ An (2x)</option>
+                    <option value="year_3x">/ An (3x)</option>
+                    <option value="year_4x">/ An (4x)</option>
                   </select>
                 </div>
-                {newFormula.period === 'year' && (
+                {newFormula.period.startsWith('year') && (
                   <div className="mt-2">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Commission Alma (%)</label>
                     <input 
@@ -2774,7 +2996,7 @@ export default function App() {
                     <p className="text-[10px] text-slate-400 font-medium italic">
                       Équivalent TTC : {formatPrice(newFormula.price).ttc} (HT : {formatPrice(newFormula.price).ht})
                     </p>
-                    {newFormula.period === 'year' && newFormula.almaCommission && (
+                    {newFormula.period.startsWith('year') && newFormula.almaCommission && (
                       <p className="text-[10px] text-indigo-600 font-bold">
                         Net après commission ({newFormula.almaCommission}% sur HT) : {(newFormula.price - ((newFormula.price / 1.2) * (newFormula.almaCommission / 100))).toFixed(2)}€ TTC (HT : {((newFormula.price / 1.2) - ((newFormula.price / 1.2) * (newFormula.almaCommission / 100))).toFixed(2)}€)
                       </p>
@@ -2845,11 +3067,11 @@ export default function App() {
                 <div className="flex-1 space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Type de période</label>
                   <div className="flex gap-2">
-                    {['day', 'week', 'month'].map((type) => (
+                    {['week', 'month'].map((type) => (
                       <button
                         key={type}
                         type="button"
-                        onClick={() => setEditingManualStats({ ...editingManualStats!, period_type: type as 'day' | 'week' | 'month' })}
+                        onClick={() => setEditingManualStats({ ...editingManualStats!, period_type: type as 'week' | 'month' })}
                         className={cn(
                           "flex-1 py-2 rounded-xl text-xs font-bold transition-all",
                           editingManualStats.period_type === type 
@@ -2857,15 +3079,14 @@ export default function App() {
                             : "bg-white text-slate-500 border border-slate-200 hover:border-slate-300"
                         )}
                       >
-                        {type === 'day' ? 'Jour' : type === 'week' ? 'Semaine' : 'Mois'}
+                        {type === 'week' ? 'Semaine' : 'Mois'}
                       </button>
                     ))}
                   </div>
                 </div>
                 <div className="flex-1 space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    {editingManualStats.period_type === 'day' ? 'Date du jour' : 
-                     editingManualStats.period_type === 'week' ? 'Semaine du' : 'Mois de'}
+                    {editingManualStats.period_type === 'week' ? 'Semaine du' : 'Mois de'}
                   </label>
                   {editingManualStats.period_type === 'week' ? (
                     <select
@@ -2879,7 +3100,7 @@ export default function App() {
                         <option key={w.value} value={w.value}>{w.label}</option>
                       ))}
                     </select>
-                  ) : editingManualStats.period_type === 'month' ? (
+                  ) : (
                     <select
                       required
                       className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
@@ -2891,14 +3112,6 @@ export default function App() {
                         <option key={m.value} value={m.value}>{m.label}</option>
                       ))}
                     </select>
-                  ) : (
-                    <input 
-                      required
-                      type="date"
-                      className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                      value={editingManualStats.period_start}
-                      onChange={(e) => setEditingManualStats({...editingManualStats, period_start: e.target.value})}
-                    />
                   )}
                 </div>
               </div>
@@ -3033,7 +3246,7 @@ export default function App() {
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-semibold text-slate-500 uppercase">Venus (Show-up)</label>
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase">Venus</label>
                       <input 
                         type="number"
                         className="w-full px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl text-sm font-bold text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
@@ -3288,7 +3501,7 @@ export default function App() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rendez-vous</label>
                   <input 
@@ -3302,6 +3515,7 @@ export default function App() {
                         appointments: val,
                         showedUp: val,
                         noShow: 0,
+                        cancelled: 0,
                         signed: val,
                         notSigned: 0,
                         pending: 0,
@@ -3320,10 +3534,33 @@ export default function App() {
                     onChange={(e) => {
                       const noShow = parseInt(e.target.value) || 0;
                       const appointments = editingDailyLog.appointments || 0;
-                      const showedUp = Math.max(0, appointments - noShow);
+                      const cancelled = editingDailyLog.cancelled || 0;
+                      const showedUp = Math.max(0, appointments - noShow - cancelled);
                       setEditingDailyLog({
                         ...editingDailyLog,
                         noShow: noShow,
+                        showedUp: showedUp,
+                        signed: showedUp,
+                        notSigned: 0,
+                        pending: 0
+                      });
+                    }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Annulés</label>
+                  <input 
+                    type="number"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    value={editingDailyLog.cancelled || ''}
+                    onChange={(e) => {
+                      const cancelled = parseInt(e.target.value) || 0;
+                      const appointments = editingDailyLog.appointments || 0;
+                      const noShow = editingDailyLog.noShow || 0;
+                      const showedUp = Math.max(0, appointments - noShow - cancelled);
+                      setEditingDailyLog({
+                        ...editingDailyLog,
+                        cancelled: cancelled,
                         showedUp: showedUp,
                         signed: showedUp,
                         notSigned: 0,
