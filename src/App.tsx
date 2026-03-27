@@ -921,21 +921,62 @@ export default function App() {
             };
           }).filter(p => p.firstName !== 'Inconnu' || p.lastName !== '' || p.email !== '');
 
-          if (prospectsToImport.length > 0) {
+          const existingEmails = new Set(clients.map(c => c.email?.toLowerCase()).filter(Boolean));
+          const existingPhones = new Set(clients.map(c => c.phone).filter(Boolean));
+          const existingNames = new Set(clients.map(c => `${c.firstName} ${c.lastName}`.toLowerCase().trim()).filter(n => n !== 'inconnu'));
+          
+          const uniqueProspects = [];
+          const seenEmails = new Set();
+          const seenPhones = new Set();
+          const seenNames = new Set();
+
+          for (const p of prospectsToImport) {
+            const email = p.email?.toLowerCase();
+            const phone = p.phone;
+            const name = `${p.firstName} ${p.lastName}`.toLowerCase().trim();
+            
+            const hasEmail = email && email !== '';
+            const hasPhone = phone && phone !== '';
+            const hasName = name && name !== '' && name !== 'inconnu';
+            
+            const isDuplicateDb = 
+              (hasEmail && existingEmails.has(email)) || 
+              (hasPhone && existingPhones.has(phone)) ||
+              (hasName && existingNames.has(name));
+              
+            const isDuplicateCsv = 
+              (hasEmail && seenEmails.has(email)) || 
+              (hasPhone && seenPhones.has(phone)) ||
+              (hasName && seenNames.has(name));
+            
+            if (!isDuplicateDb && !isDuplicateCsv) {
+              uniqueProspects.push(p);
+              if (hasEmail) seenEmails.add(email);
+              if (hasPhone) seenPhones.add(phone);
+              if (hasName) seenNames.add(name);
+            }
+          }
+
+          if (uniqueProspects.length > 0) {
             // Firestore batches are limited to 500 operations
             const BATCH_SIZE = 500;
-            for (let i = 0; i < prospectsToImport.length; i += BATCH_SIZE) {
+            for (let i = 0; i < uniqueProspects.length; i += BATCH_SIZE) {
               const batch = writeBatch(db);
-              const chunk = prospectsToImport.slice(i, i + BATCH_SIZE);
+              const chunk = uniqueProspects.slice(i, i + BATCH_SIZE);
               chunk.forEach(prospect => {
                 const docRef = doc(collection(db, 'clients'));
                 batch.set(docRef, prospect);
               });
               await batch.commit();
             }
-            showToast(`${prospectsToImport.length} prospects importés avec succès.`, 'success');
+            const skipped = prospectsToImport.length - uniqueProspects.length;
+            showToast(`${uniqueProspects.length} prospects importés avec succès.${skipped > 0 ? ` (${skipped} doublons ignorés)` : ''}`, 'success');
           } else {
-            showToast("Aucun prospect valide trouvé dans le fichier", 'error');
+            if (prospectsToImport.length > 0) {
+              showToast("Tous les prospects du fichier sont déjà présents (doublons ignorés)", 'error');
+            } else {
+              showToast("Aucun prospect valide trouvé dans le fichier", 'error');
+            }
           }
         } catch (error) {
           console.error("Error importing prospects:", error);
@@ -1028,11 +1069,47 @@ export default function App() {
             };
           }).filter(c => c.firstName !== 'Inconnu' || c.lastName !== '' || c.email !== '' || c.phone !== '');
 
-          if (clientsToImport.length > 0) {
+          const existingEmails = new Set(clients.map(c => c.email?.toLowerCase()).filter(Boolean));
+          const existingPhones = new Set(clients.map(c => c.phone).filter(Boolean));
+          const existingNames = new Set(clients.map(c => `${c.firstName} ${c.lastName}`.toLowerCase().trim()).filter(n => n !== 'inconnu'));
+          
+          const uniqueClients = [];
+          const seenEmails = new Set();
+          const seenPhones = new Set();
+          const seenNames = new Set();
+
+          for (const c of clientsToImport) {
+            const email = c.email?.toLowerCase();
+            const phone = c.phone;
+            const name = `${c.firstName} ${c.lastName}`.toLowerCase().trim();
+            
+            const hasEmail = email && email !== '';
+            const hasPhone = phone && phone !== '';
+            const hasName = name && name !== '' && name !== 'inconnu';
+            
+            const isDuplicateDb = 
+              (hasEmail && existingEmails.has(email)) || 
+              (hasPhone && existingPhones.has(phone)) ||
+              (hasName && existingNames.has(name));
+              
+            const isDuplicateCsv = 
+              (hasEmail && seenEmails.has(email)) || 
+              (hasPhone && seenPhones.has(phone)) ||
+              (hasName && seenNames.has(name));
+            
+            if (!isDuplicateDb && !isDuplicateCsv) {
+              uniqueClients.push(c);
+              if (hasEmail) seenEmails.add(email);
+              if (hasPhone) seenPhones.add(phone);
+              if (hasName) seenNames.add(name);
+            }
+          }
+
+          if (uniqueClients.length > 0) {
             // Split into chunks of 500 for Firestore batch limits
             const chunkSize = 500;
-            for (let i = 0; i < clientsToImport.length; i += chunkSize) {
-              const chunk = clientsToImport.slice(i, i + chunkSize);
+            for (let i = 0; i < uniqueClients.length; i += chunkSize) {
+              const chunk = uniqueClients.slice(i, i + chunkSize);
               const batch = writeBatch(db);
               chunk.forEach(client => {
                 const docRef = doc(collection(db, 'clients'));
@@ -1040,9 +1117,14 @@ export default function App() {
               });
               await batch.commit();
             }
-            showToast(`${clientsToImport.length} clients importés avec succès.`, 'success');
+            const skipped = clientsToImport.length - uniqueClients.length;
+            showToast(`${uniqueClients.length} clients importés avec succès.${skipped > 0 ? ` (${skipped} doublons ignorés)` : ''}`, 'success');
           } else {
-            showToast("Aucun client valide trouvé dans le fichier", 'error');
+            if (clientsToImport.length > 0) {
+              showToast("Tous les clients du fichier sont déjà présents (doublons ignorés)", 'error');
+            } else {
+              showToast("Aucun client valide trouvé dans le fichier", 'error');
+            }
           }
         } catch (error) {
           console.error("Error importing clients:", error);
