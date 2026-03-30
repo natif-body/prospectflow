@@ -72,23 +72,33 @@ export function useFirebase() {
     const uid = 'admin_user';
 
     const unsubClients = onSnapshot(query(collection(db, 'clients'), where('uid', '==', uid)), (snapshot) => {
-      setClients(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      data.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      setClients(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'clients'));
 
     const unsubFormulas = onSnapshot(query(collection(db, 'formulas'), where('uid', '==', uid)), (snapshot) => {
-      setFormulas(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      data.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      setFormulas(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'formulas'));
 
     const unsubRelances = onSnapshot(query(collection(db, 'relances'), where('uid', '==', uid)), (snapshot) => {
-      setRelances(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      data.sort((a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime());
+      setRelances(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'relances'));
 
     const unsubManualStats = onSnapshot(query(collection(db, 'manualStats'), where('uid', '==', uid)), (snapshot) => {
-      setManualStats(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      data.sort((a, b) => new Date(b.period_start || 0).getTime() - new Date(a.period_start || 0).getTime());
+      setManualStats(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'manualStats'));
 
     const unsubDailyLogs = onSnapshot(query(collection(db, 'dailyLogs'), where('uid', '==', uid)), (snapshot) => {
-      setDailyLogs(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      data.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+      setDailyLogs(data);
       setLoading(false);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'dailyLogs'));
 
