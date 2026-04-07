@@ -153,7 +153,7 @@ function WidgetRenderer({ config, stats, onUpdate, isEditMode, basketPeriod, set
   const { id, type, size } = config;
 
   const dataMap: Record<WidgetId, any> = {
-    contacts: { title: 'Total Contact', value: stats.totalContacts, icon: Users, color: 'bg-blue-50 text-blue-600', dataKey: 'prospects' },
+    contacts: { title: 'Total Contact', value: stats.totalContacts, bottomText: `${stats.contactsDigital} Dig. / ${stats.contactsNonDigital} Non Dig.`, icon: Users, color: 'bg-blue-50 text-blue-600', dataKey: 'prospects' },
     digital: { title: 'Digital', value: `${stats.digitalPercentage.toFixed(1)}%`, bottomText: `${stats.contactsDigital} / ${stats.contactsDigital + stats.contactsNonDigital}`, icon: TrendingUp, color: 'bg-cyan-50 text-cyan-600' },
     tauxRdv: { title: 'Taux RDV', value: `${stats.appointmentRate.toFixed(1)}%`, bottomText: `${stats.appointmentsTaken} / ${stats.totalContacts}`, icon: Calendar, color: 'bg-indigo-50 text-indigo-600', dataKey: 'appointments' },
     tauxShowUp: { title: 'Taux de show', value: `${stats.showUpRate.toFixed(1)}%`, bottomText: `${stats.attendance.showedUp} / ${stats.totalAppointments}`, icon: UserCheck, color: 'bg-emerald-50 text-emerald-600', dataKey: 'showUp' },
@@ -1470,6 +1470,8 @@ export default function App() {
                   { id: 'yesterday', label: 'Hier' },
                   { id: '7d', label: '7j' },
                   { id: '30d', label: '30j' },
+                  { id: 'thisMonth', label: 'Mois en cours' },
+                  { id: 'lastMonth', label: 'Mois dernier' },
                   { id: 'all', label: 'Tout' },
                   { id: 'custom', label: 'Perso' },
                 ].map((p) => (
@@ -1481,24 +1483,33 @@ export default function App() {
                         setShowDatePicker(true);
                       } else {
                         const now = new Date();
+                        now.setHours(12, 0, 0, 0);
                         let start = '';
                         let end = now.toISOString().split('T')[0];
                         
                         if (p.id === 'today') {
                           start = end;
                         } else if (p.id === 'yesterday') {
-                          const yest = new Date();
+                          const yest = new Date(now);
                           yest.setDate(yest.getDate() - 1);
                           start = yest.toISOString().split('T')[0];
                           end = start;
                         } else if (p.id === '7d') {
-                          const week = new Date();
+                          const week = new Date(now);
                           week.setDate(week.getDate() - 7);
                           start = week.toISOString().split('T')[0];
                         } else if (p.id === '30d') {
-                          const month = new Date();
+                          const month = new Date(now);
                           month.setDate(month.getDate() - 30);
                           start = month.toISOString().split('T')[0];
+                        } else if (p.id === 'thisMonth') {
+                          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 12, 0, 0);
+                          start = startOfMonth.toISOString().split('T')[0];
+                        } else if (p.id === 'lastMonth') {
+                          const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 12, 0, 0);
+                          const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 12, 0, 0);
+                          start = startOfLastMonth.toISOString().split('T')[0];
+                          end = endOfLastMonth.toISOString().split('T')[0];
                         }
 
                         setDateRange({ startDate: start, endDate: start ? end : '' });
