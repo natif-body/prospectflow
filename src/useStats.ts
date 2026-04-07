@@ -31,9 +31,17 @@ export function useStats(
     let manualEntries = manualStats;
     let dailyEntries = dailyLogs;
     if (startDate && endDate) {
-      manualEntries = manualStats.filter(entry => 
-        entry.period_start >= startDate && entry.period_start <= endDate
-      );
+      manualEntries = manualStats.filter(entry => {
+        if (entry.period_type === 'month') {
+          const monthStart = `${entry.period_start}-01`;
+          // If the month start is within the range, or if the range is within the month
+          const monthEnd = `${entry.period_start}-31`;
+          return (monthStart >= startDate && monthStart <= endDate) || 
+                 (monthEnd >= startDate && monthEnd <= endDate) ||
+                 (startDate >= monthStart && endDate <= monthEnd);
+        }
+        return entry.period_start >= startDate && entry.period_start <= endDate;
+      });
       dailyEntries = dailyLogs.filter(entry => 
         entry.date >= startDate && entry.date <= endDate
       );
