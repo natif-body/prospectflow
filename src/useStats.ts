@@ -1,15 +1,16 @@
 import { useMemo } from 'react';
-import { Client, Formula, ManualStats, DashboardStats } from './types';
+import { Client, Formula, ManualStats, DailyLog, DashboardStats } from './types';
 
 export function useStats(
   clients: Client[],
   formulas: Formula[],
   manualStats: ManualStats[],
+  dailyLogs: DailyLog[],
   startDate?: string,
   endDate?: string
 ): DashboardStats | null {
   return useMemo(() => {
-    if (!clients || !manualStats) return null;
+    if (!clients || !manualStats || !dailyLogs) return null;
 
     let manualStatsSum = {
       totalContacts: 0,
@@ -28,9 +29,13 @@ export function useStats(
     };
 
     let manualEntries = manualStats;
+    let dailyEntries = dailyLogs;
     if (startDate && endDate) {
       manualEntries = manualStats.filter(entry => 
         entry.period_start >= startDate && entry.period_start <= endDate
+      );
+      dailyEntries = dailyLogs.filter(entry => 
+        entry.date >= startDate && entry.date <= endDate
       );
     }
 
@@ -48,6 +53,22 @@ export function useStats(
       manualStatsSum.totalPickups += entry.totalPickups || 0;
       manualStatsSum.contactsDigital += entry.contactsDigital || 0;
       manualStatsSum.contactsNonDigital += entry.contactsNonDigital || 0;
+    });
+
+    dailyEntries.forEach(entry => {
+      manualStatsSum.totalContacts += entry.totalContacts !== undefined ? entry.totalContacts : ((entry.digital || 0) + (entry.nonDigital || 0));
+      manualStatsSum.appointmentsTaken += entry.appointments || 0;
+      manualStatsSum.appointmentsProspect += entry.appointmentsProspect || 0;
+      manualStatsSum.appointmentsSetter += entry.appointmentsSetter || 0;
+      manualStatsSum.showedUp += entry.showedUp || 0;
+      manualStatsSum.noShow += entry.noShow || 0;
+      manualStatsSum.cancelled += entry.cancelled || 0;
+      manualStatsSum.signed += entry.signed || 0;
+      manualStatsSum.notSigned += entry.notSigned || 0;
+      manualStatsSum.totalCalls += entry.totalCalls || 0;
+      manualStatsSum.totalPickups += entry.totalPickups || 0;
+      manualStatsSum.contactsDigital += entry.digital || 0;
+      manualStatsSum.contactsNonDigital += entry.nonDigital || 0;
     });
 
     // Churn calculation based on clients table (only those with a formula)

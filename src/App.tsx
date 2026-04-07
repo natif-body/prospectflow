@@ -451,7 +451,7 @@ export default function App() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const stats = useStats(clients, formulas, manualStats, dateRange.startDate, dateRange.endDate);
+  const stats = useStats(clients, formulas, manualStats, dailyLogs, dateRange.startDate, dateRange.endDate);
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'relances' | 'settings'>('dashboard');
   const [showArchivedRelances, setShowArchivedRelances] = useState(false);
@@ -1574,6 +1574,9 @@ export default function App() {
                 const dateStr = now.toISOString().split('T')[0];
                 setEditingDailyLog({
                   date: dateStr,
+                  totalContacts: 0,
+                  appointmentsProspect: 0,
+                  appointmentsSetter: 0,
                   appointments: 0,
                   showedUp: 0,
                   signed: 0,
@@ -1582,14 +1585,16 @@ export default function App() {
                   noShow: 0,
                   cancelled: 0,
                   digital: 0,
-                  nonDigital: 0
+                  nonDigital: 0,
+                  totalCalls: 0,
+                  totalPickups: 0
                 });
                 setIsDailyLogModalOpen(true);
               }}
               className="bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-sm"
             >
               <FileText className="w-4 h-4" />
-              Bloc-notes
+              Saisie quotidienne
             </button>
             <button 
               onClick={() => {
@@ -1618,7 +1623,7 @@ export default function App() {
               className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-sm"
             >
               <FileText className="w-4 h-4" />
-              Saisie Chiffres
+              Saisie additionnelle
             </button>
             <button 
               onClick={() => setIsClientModalOpen(true)}
@@ -1798,7 +1803,7 @@ export default function App() {
                         <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Période</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Contacts</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Digital</th>
-                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Bloc-notes</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Saisie quot.</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">RDV</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Venus</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Signés</th>
@@ -1832,6 +1837,9 @@ export default function App() {
                                 const logDate = entry.period_type === 'day' ? entry.period_start : format(new Date(), 'yyyy-MM-dd');
                                 setEditingDailyLog({
                                   date: logDate,
+                                  totalContacts: 0,
+                                  appointmentsProspect: 0,
+                                  appointmentsSetter: 0,
                                   appointments: 0,
                                   showedUp: 0,
                                   signed: 0,
@@ -1840,7 +1848,9 @@ export default function App() {
                                   noShow: 0,
                                   cancelled: 0,
                                   digital: 0,
-                                  nonDigital: 0
+                                  nonDigital: 0,
+                                  totalCalls: 0,
+                                  totalPickups: 0
                                 });
                                 setIsDailyLogModalOpen(true);
                               }}
@@ -3104,20 +3114,10 @@ export default function App() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Saisie Chiffres</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Enregistrez vos chiffres pour mettre à jour le tableau de bord</p>
+                <h3 className="text-lg font-bold text-slate-900">Saisie additionnelle</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Ajoutez des chiffres complémentaires pour ajuster le tableau de bord</p>
               </div>
               <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => {
-                    setIsImportSelectionModalOpen(true);
-                    setSelectedLogIds([]);
-                  }}
-                  className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Importer du Bloc-notes
-                </button>
                 <button onClick={() => setIsManualStatsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                   <XCircle className="w-5 h-5" />
                 </button>
@@ -3202,37 +3202,27 @@ export default function App() {
                 <div className="space-y-4">
                   <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest border-l-2 border-indigo-500 pl-2">Prospection & RDV</h4>
                   
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase">Nouveaux Contacts</label>
-                    <input 
-                      type="number"
-                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                      placeholder="0"
-                      value={editingManualStats.totalContacts || ''}
-                      onChange={(e) => {
-                        const total = parseInt(e.target.value) || 0;
-                        setEditingManualStats({
-                          ...editingManualStats, 
-                          totalContacts: total,
-                          contactsDigital: total,
-                          contactsNonDigital: 0
-                        });
-                      }}
-                    />
-                  </div>
-
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-semibold text-slate-500 uppercase">Digital</label>
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase">Contacts Digitaux</label>
                       <input 
-                        disabled
                         type="number"
-                        className="w-full px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-400 cursor-not-allowed"
-                        value={editingManualStats.contactsDigital}
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        placeholder="0"
+                        value={editingManualStats.contactsDigital || ''}
+                        onChange={(e) => {
+                          const digital = parseInt(e.target.value) || 0;
+                          const nonDigital = editingManualStats.contactsNonDigital || 0;
+                          setEditingManualStats({
+                            ...editingManualStats, 
+                            contactsDigital: digital,
+                            totalContacts: digital + nonDigital
+                          });
+                        }}
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-semibold text-slate-500 uppercase">Non Digital</label>
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase">Contacts Non Digitaux</label>
                       <input 
                         type="number"
                         className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
@@ -3240,11 +3230,11 @@ export default function App() {
                         value={editingManualStats.contactsNonDigital || ''}
                         onChange={(e) => {
                           const nonDigital = parseInt(e.target.value) || 0;
-                          const total = editingManualStats.totalContacts || 0;
+                          const digital = editingManualStats.contactsDigital || 0;
                           setEditingManualStats({
                             ...editingManualStats, 
                             contactsNonDigital: nonDigital,
-                            contactsDigital: Math.max(0, total - nonDigital)
+                            totalContacts: digital + nonDigital
                           });
                         }}
                       />
@@ -3561,17 +3551,17 @@ export default function App() {
       {/* Modal - Bloc-notes (Daily Log) */}
       {isDailyLogModalOpen && editingDailyLog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Bloc-notes Quotidien</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Notez vos rendez-vous du jour rapidement</p>
+                <h3 className="text-lg font-bold text-slate-900">Saisie quotidienne</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Notez vos chiffres et rendez-vous du jour</p>
               </div>
               <button onClick={() => setIsDailyLogModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleDailyLogSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleDailyLogSubmit} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date</label>
                 <input 
@@ -3583,174 +3573,219 @@ export default function App() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rendez-vous</label>
-                  <input 
-                    type="number"
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    value={editingDailyLog.appointments || ''}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value) || 0;
-                      setEditingDailyLog({
-                        ...editingDailyLog,
-                        appointments: val,
-                        showedUp: val,
-                        noShow: 0,
-                        cancelled: 0,
-                        signed: val,
-                        notSigned: 0,
-                        pending: 0,
-                        digital: val,
-                        nonDigital: 0
-                      });
-                    }}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Non Venus</label>
-                  <input 
-                    type="number"
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    value={editingDailyLog.noShow || ''}
-                    onChange={(e) => {
-                      const noShow = parseInt(e.target.value) || 0;
-                      const appointments = editingDailyLog.appointments || 0;
-                      const cancelled = editingDailyLog.cancelled || 0;
-                      const showedUp = Math.max(0, appointments - noShow - cancelled);
-                      setEditingDailyLog({
-                        ...editingDailyLog,
-                        noShow: noShow,
-                        showedUp: showedUp,
-                        signed: showedUp,
-                        notSigned: 0,
-                        pending: 0
-                      });
-                    }}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Annulés</label>
-                  <input 
-                    type="number"
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    value={editingDailyLog.cancelled || ''}
-                    onChange={(e) => {
-                      const cancelled = parseInt(e.target.value) || 0;
-                      const appointments = editingDailyLog.appointments || 0;
-                      const noShow = editingDailyLog.noShow || 0;
-                      const showedUp = Math.max(0, appointments - noShow - cancelled);
-                      setEditingDailyLog({
-                        ...editingDailyLog,
-                        cancelled: cancelled,
-                        showedUp: showedUp,
-                        signed: showedUp,
-                        notSigned: 0,
-                        pending: 0
-                      });
-                    }}
-                  />
-                </div>
-              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Colonne 1: Contacts et Appels */}
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase">Contacts Non Digitaux</label>
+                    <input 
+                      type="number"
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      value={editingDailyLog.nonDigital || ''}
+                      onChange={(e) => {
+                        const nonDigital = parseInt(e.target.value) || 0;
+                        setEditingDailyLog({
+                          ...editingDailyLog, 
+                          nonDigital: nonDigital,
+                          totalContacts: nonDigital,
+                          digital: 0
+                        });
+                      }}
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Venus</label>
-                  <input 
-                    type="number"
-                    className="w-full px-4 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-sm font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                    value={editingDailyLog.showedUp || ''}
-                    onChange={(e) => {
-                      const showedUp = parseInt(e.target.value) || 0;
-                      setEditingDailyLog({
-                        ...editingDailyLog,
-                        showedUp: showedUp,
-                        signed: Math.max(0, showedUp - (editingDailyLog.notSigned || 0) - (editingDailyLog.pending || 0))
-                      });
-                    }}
-                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase">Appels</label>
+                      <input 
+                        type="number"
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        value={editingDailyLog.totalCalls || ''}
+                        onChange={(e) => setEditingDailyLog({...editingDailyLog, totalCalls: parseInt(e.target.value) || 0})}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase">Décrochés</label>
+                      <input 
+                        type="number"
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        value={editingDailyLog.totalPickups || ''}
+                        onChange={(e) => setEditingDailyLog({...editingDailyLog, totalPickups: parseInt(e.target.value) || 0})}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Signés</label>
-                  <input 
-                    type="number"
-                    className="w-full px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl text-sm font-bold text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                    value={editingDailyLog.signed || ''}
-                    onChange={(e) => setEditingDailyLog({...editingDailyLog, signed: parseInt(e.target.value) || 0})}
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pas Signés</label>
-                  <input 
-                    type="number"
-                    className="w-full px-4 py-2 bg-rose-50 border border-rose-100 rounded-xl text-sm font-bold text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                    value={editingDailyLog.notSigned || ''}
-                    onChange={(e) => {
-                      const notSigned = parseInt(e.target.value) || 0;
-                      const showedUp = editingDailyLog.showedUp || 0;
-                      const pending = editingDailyLog.pending || 0;
-                      setEditingDailyLog({
-                        ...editingDailyLog,
-                        notSigned: notSigned,
-                        signed: Math.max(0, showedUp - notSigned - pending)
-                      });
-                    }}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">En attente</label>
-                  <input 
-                    type="number"
-                    className="w-full px-4 py-2 bg-amber-50 border border-amber-100 rounded-xl text-sm font-bold text-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                    value={editingDailyLog.pending || ''}
-                    onChange={(e) => {
-                      const pending = parseInt(e.target.value) || 0;
-                      const showedUp = editingDailyLog.showedUp || 0;
-                      const notSigned = editingDailyLog.notSigned || 0;
-                      
-                      if (pending > (editingDailyLog.pending || 0)) {
-                        setIsRelanceModalOpen(true);
-                      }
+                {/* Colonne 2: Rendez-vous et Résultats */}
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase">Total Rendez-vous</label>
+                    <input 
+                      type="number"
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      value={editingDailyLog.appointments || ''}
+                      onChange={(e) => {
+                        const total = parseInt(e.target.value) || 0;
+                        setEditingDailyLog({
+                          ...editingDailyLog, 
+                          appointments: total,
+                          appointmentsProspect: total,
+                          appointmentsSetter: 0,
+                          showedUp: total,
+                          noShow: 0,
+                          cancelled: 0,
+                          signed: total,
+                          notSigned: 0,
+                          pending: 0
+                        });
+                      }}
+                    />
+                  </div>
 
-                      setEditingDailyLog({
-                        ...editingDailyLog,
-                        pending: pending,
-                        signed: Math.max(0, showedUp - notSigned - pending)
-                      });
-                    }}
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase">RDV Prospect</label>
+                      <input 
+                        disabled
+                        type="number"
+                        className="w-full px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-400 cursor-not-allowed"
+                        value={editingDailyLog.appointmentsProspect || 0}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase">RDV Setter</label>
+                      <input 
+                        type="number"
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        value={editingDailyLog.appointmentsSetter || ''}
+                        onChange={(e) => {
+                          const setter = parseInt(e.target.value) || 0;
+                          const total = editingDailyLog.appointments || 0;
+                          setEditingDailyLog({
+                            ...editingDailyLog, 
+                            appointmentsSetter: setter,
+                            appointmentsProspect: Math.max(0, total - setter)
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Digital</label>
-                  <input 
-                    type="number"
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    value={editingDailyLog.digital || ''}
-                    onChange={(e) => setEditingDailyLog({...editingDailyLog, digital: parseInt(e.target.value) || 0})}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Non Digital</label>
-                  <input 
-                    type="number"
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    value={editingDailyLog.nonDigital || ''}
-                    onChange={(e) => {
-                      const nonDigital = parseInt(e.target.value) || 0;
-                      const appointments = editingDailyLog.appointments || 0;
-                      setEditingDailyLog({
-                        ...editingDailyLog,
-                        nonDigital: nonDigital,
-                        digital: Math.max(0, appointments - nonDigital)
-                      });
-                    }}
-                  />
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase">Venus</label>
+                      <input 
+                        type="number"
+                        className="w-full px-4 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-sm font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        value={editingDailyLog.showedUp || ''}
+                        onChange={(e) => {
+                          const showedUp = parseInt(e.target.value) || 0;
+                          setEditingDailyLog({
+                            ...editingDailyLog,
+                            showedUp: showedUp,
+                            signed: Math.max(0, showedUp - (editingDailyLog.notSigned || 0) - (editingDailyLog.pending || 0))
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase">Non Venus</label>
+                      <input 
+                        type="number"
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        value={editingDailyLog.noShow || ''}
+                        onChange={(e) => {
+                          const noShow = parseInt(e.target.value) || 0;
+                          const appointments = editingDailyLog.appointments || 0;
+                          const cancelled = editingDailyLog.cancelled || 0;
+                          const showedUp = Math.max(0, appointments - noShow - cancelled);
+                          setEditingDailyLog({
+                            ...editingDailyLog,
+                            noShow: noShow,
+                            showedUp: showedUp,
+                            signed: showedUp,
+                            notSigned: 0,
+                            pending: 0
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase">Annulés</label>
+                      <input 
+                        type="number"
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        value={editingDailyLog.cancelled || ''}
+                        onChange={(e) => {
+                          const cancelled = parseInt(e.target.value) || 0;
+                          const appointments = editingDailyLog.appointments || 0;
+                          const noShow = editingDailyLog.noShow || 0;
+                          const showedUp = Math.max(0, appointments - noShow - cancelled);
+                          setEditingDailyLog({
+                            ...editingDailyLog,
+                            cancelled: cancelled,
+                            showedUp: showedUp,
+                            signed: showedUp,
+                            notSigned: 0,
+                            pending: 0
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase">Signés</label>
+                      <input 
+                        type="number"
+                        className="w-full px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl text-sm font-bold text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                        value={editingDailyLog.signed || ''}
+                        onChange={(e) => setEditingDailyLog({...editingDailyLog, signed: parseInt(e.target.value) || 0})}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase">Pas Signés</label>
+                      <input 
+                        type="number"
+                        className="w-full px-4 py-2 bg-rose-50 border border-rose-100 rounded-xl text-sm font-bold text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                        value={editingDailyLog.notSigned || ''}
+                        onChange={(e) => {
+                          const notSigned = parseInt(e.target.value) || 0;
+                          const showedUp = editingDailyLog.showedUp || 0;
+                          const pending = editingDailyLog.pending || 0;
+                          setEditingDailyLog({
+                            ...editingDailyLog,
+                            notSigned: notSigned,
+                            signed: Math.max(0, showedUp - notSigned - pending)
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase">En attente</label>
+                      <input 
+                        type="number"
+                        className="w-full px-4 py-2 bg-amber-50 border border-amber-100 rounded-xl text-sm font-bold text-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                        value={editingDailyLog.pending || ''}
+                        onChange={(e) => {
+                          const pending = parseInt(e.target.value) || 0;
+                          const showedUp = editingDailyLog.showedUp || 0;
+                          const notSigned = editingDailyLog.notSigned || 0;
+                          
+                          if (pending > (editingDailyLog.pending || 0)) {
+                            setIsRelanceModalOpen(true);
+                          }
+
+                          setEditingDailyLog({
+                            ...editingDailyLog,
+                            pending: pending,
+                            signed: Math.max(0, showedUp - notSigned - pending)
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -3760,13 +3795,13 @@ export default function App() {
                   className="w-full bg-slate-900 hover:bg-slate-800 text-white py-3 rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-2"
                 >
                   <Save className="w-4 h-4" />
-                  Enregistrer la note
+                  Enregistrer la saisie
                 </button>
               </div>
             </form>
 
             <div className="p-6 bg-slate-50 border-t border-slate-100 max-h-60 overflow-y-auto">
-              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Notes récentes</h4>
+              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Saisies récentes</h4>
               <div className="space-y-2">
                 {dailyLogs.slice(0, 10).map(log => (
                   <div key={log.id} className="bg-white p-3 rounded-xl border border-slate-200 flex justify-between items-center group">

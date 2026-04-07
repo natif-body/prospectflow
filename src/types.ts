@@ -145,6 +145,9 @@ export interface ManualStats {
 export interface DailyLog {
   id?: string;
   date: string;
+  totalContacts?: number;
+  appointmentsProspect?: number;
+  appointmentsSetter?: number;
   appointments: number;
   showedUp: number;
   signed: number;
@@ -154,6 +157,8 @@ export interface DailyLog {
   cancelled: number;
   digital: number;
   nonDigital: number;
+  totalCalls?: number;
+  totalPickups?: number;
 }
 
 export type ReportPeriod = 'day' | 'week' | 'month' | 'total';
