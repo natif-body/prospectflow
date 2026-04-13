@@ -559,41 +559,6 @@ export default function App() {
     setToast({ message, type });
   };
 
-  const seedTestData = async () => {
-    try {
-      const batch = writeBatch(db);
-      
-      // Saisies additionnelles (manualStats)
-      const manualEntries = [
-        { period_start: '2026-03-02', period_type: 'week', totalContacts: 18, contactsDigital: 18, contactsNonDigital: 0, uid: user?.uid || 'admin_user' },
-        { period_start: '2026-03-08', period_type: 'week', totalContacts: 8, contactsDigital: 8, contactsNonDigital: 0, uid: user?.uid || 'admin_user' },
-        { period_start: '2026-03-15', period_type: 'week', totalContacts: 15, contactsDigital: 15, contactsNonDigital: 0, uid: user?.uid || 'admin_user' },
-        { period_start: '2026-03', period_type: 'month', totalContacts: 22, contactsDigital: 22, contactsNonDigital: 0, uid: user?.uid || 'admin_user' }
-      ];
-
-      manualEntries.forEach(entry => {
-        const docRef = doc(collection(db, 'manualStats'));
-        batch.set(docRef, entry);
-      });
-
-      // Saisies quotidiennes (dailyLogs)
-      const dailyEntries = [
-        { date: '2026-03-10', totalContacts: 4, digital: 0, nonDigital: 4, uid: user?.uid || 'admin_user' }
-      ];
-
-      dailyEntries.forEach(entry => {
-        const docRef = doc(collection(db, 'dailyLogs'));
-        batch.set(docRef, entry);
-      });
-
-      await batch.commit();
-      showToast('Données de test restaurées', 'success');
-    } catch (error) {
-      console.error("Error seeding test data:", error);
-      showToast('Erreur lors de la restauration', 'error');
-    }
-  };
-
   const handleDeleteManualStats = async (id: string) => {
     showConfirm('Supprimer la saisie', 'Êtes-vous sûr de vouloir supprimer cette saisie ?', async () => {
       try {
@@ -1386,6 +1351,23 @@ export default function App() {
 
   const displayedRelances = relances.filter(r => showArchivedRelances ? r.status !== 'PENDING' : r.status === 'PENDING');
 
+  if (authError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
+        <div className="bg-red-50 text-red-600 p-6 rounded-2xl max-w-md text-center border border-red-100">
+          <h2 className="font-bold text-lg mb-2">Erreur de connexion</h2>
+          <p className="text-sm">{authError}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700"
+          >
+            Rafraîchir la page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading || !isAuthReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -1564,13 +1546,6 @@ export default function App() {
           <div className="flex items-center gap-4">
             {activeTab === 'dashboard' && (
               <div className="hidden md:flex items-center gap-2">
-                <button
-                  onClick={seedTestData}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl text-sm font-semibold hover:bg-emerald-100 transition-colors"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  Restaurer données test
-                </button>
                 {isDashboardEditMode && (
                   <button 
                     onClick={() => {
