@@ -44,8 +44,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 export function useFirebase() {
-  const [user, setUser] = useState<any>(null); // Keep for compatibility but we won't strictly need it
-  const [isAuthReady, setIsAuthReady] = useState(true); // Always ready now
+  const [user, setUser] = useState<any>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   
   const [clients, setClients] = useState<Client[]>([]);
@@ -55,21 +55,20 @@ export function useFirebase() {
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // We no longer need auth state changes to load data, but we'll keep the test connection
   useEffect(() => {
-    // Test connection
-    getDocFromServer(doc(db, 'test', 'connection')).catch(error => {
-      if(error instanceof Error && error.message.includes('the client is offline')) {
-        console.error("Please check your Firebase configuration.");
-      }
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsAuthReady(true);
     });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
+    if (!isAuthReady) return;
+
     setLoading(true);
-    // We use a hardcoded UID or just query all since the rules allow it.
-    // To keep data isolated if you ever want to, we'll use a default 'admin' uid.
-    const uid = 'admin_user';
+    const uid = user?.uid || 'admin_user';
 
     const unsubClients = onSnapshot(query(collection(db, 'clients'), where('uid', '==', uid)), (snapshot) => {
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));

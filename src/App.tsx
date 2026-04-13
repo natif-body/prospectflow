@@ -565,10 +565,10 @@ export default function App() {
       
       // Saisies additionnelles (manualStats)
       const manualEntries = [
-        { period_start: '2026-03-02', period_type: 'week', totalContacts: 18, contactsDigital: 18, contactsNonDigital: 0, uid: 'admin_user' },
-        { period_start: '2026-03-08', period_type: 'week', totalContacts: 8, contactsDigital: 8, contactsNonDigital: 0, uid: 'admin_user' },
-        { period_start: '2026-03-15', period_type: 'week', totalContacts: 15, contactsDigital: 15, contactsNonDigital: 0, uid: 'admin_user' },
-        { period_start: '2026-03', period_type: 'month', totalContacts: 22, contactsDigital: 22, contactsNonDigital: 0, uid: 'admin_user' }
+        { period_start: '2026-03-02', period_type: 'week', totalContacts: 18, contactsDigital: 18, contactsNonDigital: 0, uid: user?.uid || 'admin_user' },
+        { period_start: '2026-03-08', period_type: 'week', totalContacts: 8, contactsDigital: 8, contactsNonDigital: 0, uid: user?.uid || 'admin_user' },
+        { period_start: '2026-03-15', period_type: 'week', totalContacts: 15, contactsDigital: 15, contactsNonDigital: 0, uid: user?.uid || 'admin_user' },
+        { period_start: '2026-03', period_type: 'month', totalContacts: 22, contactsDigital: 22, contactsNonDigital: 0, uid: user?.uid || 'admin_user' }
       ];
 
       manualEntries.forEach(entry => {
@@ -578,7 +578,7 @@ export default function App() {
 
       // Saisies quotidiennes (dailyLogs)
       const dailyEntries = [
-        { date: '2026-03-10', totalContacts: 4, digital: 0, nonDigital: 4, uid: 'admin_user' }
+        { date: '2026-03-10', totalContacts: 4, digital: 0, nonDigital: 4, uid: user?.uid || 'admin_user' }
       ];
 
       dailyEntries.forEach(entry => {
@@ -607,15 +607,15 @@ export default function App() {
 
   const seedDefaultFormulas = async () => {
     const defaults = [
-      { name: 'Hebdomadaire Basique', price: 30, period: 'week', uid: 'admin_user' },
-      { name: 'Hebdomadaire Classique', price: 50, period: 'week', uid: 'admin_user' },
-      { name: 'Hebdomadaire Premium', price: 80, period: 'week', uid: 'admin_user' },
-      { name: 'Mensuel Basique', price: 100, period: 'month', uid: 'admin_user' },
-      { name: 'Mensuel Classique', price: 150, period: 'month', uid: 'admin_user' },
-      { name: 'Mensuel Premium', price: 250, period: 'month', uid: 'admin_user' },
-      { name: 'Annuel Basique', price: 1000, period: 'year', uid: 'admin_user' },
-      { name: 'Annuel Classique', price: 1500, period: 'year', uid: 'admin_user' },
-      { name: 'Annuel Premium', price: 2500, period: 'year', uid: 'admin_user' }
+      { name: 'Hebdomadaire Basique', price: 30, period: 'week', uid: user?.uid || 'admin_user' },
+      { name: 'Hebdomadaire Classique', price: 50, period: 'week', uid: user?.uid || 'admin_user' },
+      { name: 'Hebdomadaire Premium', price: 80, period: 'week', uid: user?.uid || 'admin_user' },
+      { name: 'Mensuel Basique', price: 100, period: 'month', uid: user?.uid || 'admin_user' },
+      { name: 'Mensuel Classique', price: 150, period: 'month', uid: user?.uid || 'admin_user' },
+      { name: 'Mensuel Premium', price: 250, period: 'month', uid: user?.uid || 'admin_user' },
+      { name: 'Annuel Basique', price: 1000, period: 'year', uid: user?.uid || 'admin_user' },
+      { name: 'Annuel Classique', price: 1500, period: 'year', uid: user?.uid || 'admin_user' },
+      { name: 'Annuel Premium', price: 2500, period: 'year', uid: user?.uid || 'admin_user' }
     ];
     
     try {
@@ -644,7 +644,7 @@ export default function App() {
       } else {
         await addDoc(collection(db, 'dailyLogs'), {
           ...editingDailyLog,
-          uid: 'admin_user'
+          uid: user?.uid || 'admin_user'
         });
       }
       setIsDailyLogModalOpen(false);
@@ -678,7 +678,7 @@ export default function App() {
         statusJ1: 'PENDING',
         statusJourJ: 'PENDING',
         createdAt: new Date().toISOString(),
-        uid: 'admin_user'
+        uid: user?.uid || 'admin_user'
       });
 
       setIsRelanceModalOpen(false);
@@ -841,7 +841,7 @@ export default function App() {
         createdAt: new Date(newClient.createdAt).toISOString(),
         isActive: true,
         status: 'ACTIVE',
-        uid: 'admin_user'
+        uid: user?.uid || 'admin_user'
       });
       setIsClientModalOpen(false);
       setNewClient({ 
@@ -952,7 +952,7 @@ export default function App() {
               })(),
               isActive: true,
               status: 'ACTIVE',
-              uid: 'admin_user'
+              uid: user?.uid || 'admin_user'
             };
           }).filter(p => p.firstName !== 'Inconnu' || p.lastName !== '' || p.email !== '');
 
@@ -1100,7 +1100,7 @@ export default function App() {
               isActive,
               status,
               deactivatedAt: !isActive ? new Date().toISOString() : null,
-              uid: 'admin_user'
+              uid: user?.uid || 'admin_user'
             };
           }).filter(c => c.firstName !== 'Inconnu' || c.lastName !== '' || c.email !== '' || c.phone !== '');
 
@@ -1205,7 +1205,7 @@ export default function App() {
                 totalContacts: 0, // Required field
                 totalCalls: calls,
                 totalPickups: pickups,
-                uid: 'admin_user'
+                uid: user?.uid || 'admin_user'
               });
             }
           }
@@ -3079,7 +3079,7 @@ export default function App() {
                   } else {
                     await addDoc(collection(db, 'formulas'), {
                       ...newFormula,
-                      uid: 'admin_user'
+                      uid: user?.uid || 'admin_user'
                     });
                   }
                   setIsFormulaModalOpen(false);
@@ -3188,7 +3188,7 @@ export default function App() {
                   } else {
                     await addDoc(collection(db, 'manualStats'), {
                       ...editingManualStats,
-                      uid: 'admin_user'
+                      uid: user?.uid || 'admin_user'
                     });
                   }
                   setIsManualStatsModalOpen(false);
