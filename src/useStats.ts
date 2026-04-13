@@ -254,7 +254,7 @@ export function useStats(
     const showUpRate = totalAppointments > 0 ? (manualStatsSum.showedUp / totalAppointments) * 100 : 0;
     
     const totalDecisions = manualStatsSum.signed + manualStatsSum.notSigned;
-    const closingRate = totalDecisions > 0 ? (manualStatsSum.signed / totalDecisions) * 100 : 0;
+    const closingRate = manualStatsSum.showedUp > 0 ? (manualStatsSum.signed / manualStatsSum.showedUp) * 100 : 0;
 
     const appointmentRate = manualStatsSum.totalContacts > 0 ? (manualStatsSum.appointmentsTaken / manualStatsSum.totalContacts) * 100 : 0;
     const pickupRate = manualStatsSum.totalCalls > 0 ? (manualStatsSum.totalPickups / manualStatsSum.totalCalls) * 100 : 0;

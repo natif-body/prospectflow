@@ -157,7 +157,7 @@ function WidgetRenderer({ config, stats, onUpdate, isEditMode, basketPeriod, set
     digital: { title: 'Digital', value: `${stats.digitalPercentage.toFixed(1)}%`, bottomText: `${stats.contactsDigital} / ${stats.contactsDigital + stats.contactsNonDigital}`, icon: TrendingUp, color: 'bg-cyan-50 text-cyan-600' },
     tauxRdv: { title: 'Taux RDV', value: `${stats.appointmentRate.toFixed(1)}%`, bottomText: `${stats.appointmentsTaken} / ${stats.totalContacts}`, icon: Calendar, color: 'bg-indigo-50 text-indigo-600', dataKey: 'appointments' },
     tauxShowUp: { title: 'Taux de show', value: `${stats.showUpRate.toFixed(1)}%`, bottomText: `${stats.attendance.showedUp} / ${stats.totalAppointments}`, icon: UserCheck, color: 'bg-emerald-50 text-emerald-600', dataKey: 'showUp' },
-    tauxClosing: { title: 'Taux Closing', value: `${stats.closingRate.toFixed(1)}%`, bottomText: `${stats.signatures} / ${stats.totalDecisions}`, icon: CheckCircle2, color: 'bg-violet-50 text-violet-600' },
+    tauxClosing: { title: 'Taux Closing', value: `${stats.closingRate.toFixed(1)}%`, bottomText: `${stats.signatures} / ${stats.attendance.showedUp}`, icon: CheckCircle2, color: 'bg-violet-50 text-violet-600' },
     caGlobal: {
       title: showNetRevenue ? "CA Global (Net)" : "CA Global",
       value: formatExactPrice(showNetRevenue ? stats.globalMrrNetHT : stats.globalMrrHT, showNetRevenue ? stats.globalMrrNetTTC : stats.globalMrrTTC).ht,
@@ -557,6 +557,41 @@ export default function App() {
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
+  };
+
+  const seedTestData = async () => {
+    try {
+      const batch = writeBatch(db);
+      
+      // Saisies additionnelles (manualStats)
+      const manualEntries = [
+        { period_start: '2026-03-02', period_type: 'week', totalContacts: 18, contactsDigital: 18, contactsNonDigital: 0, uid: 'admin_user' },
+        { period_start: '2026-03-08', period_type: 'week', totalContacts: 8, contactsDigital: 8, contactsNonDigital: 0, uid: 'admin_user' },
+        { period_start: '2026-03-15', period_type: 'week', totalContacts: 15, contactsDigital: 15, contactsNonDigital: 0, uid: 'admin_user' },
+        { period_start: '2026-03', period_type: 'month', totalContacts: 22, contactsDigital: 22, contactsNonDigital: 0, uid: 'admin_user' }
+      ];
+
+      manualEntries.forEach(entry => {
+        const docRef = doc(collection(db, 'manualStats'));
+        batch.set(docRef, entry);
+      });
+
+      // Saisies quotidiennes (dailyLogs)
+      const dailyEntries = [
+        { date: '2026-03-10', totalContacts: 4, digital: 0, nonDigital: 4, uid: 'admin_user' }
+      ];
+
+      dailyEntries.forEach(entry => {
+        const docRef = doc(collection(db, 'dailyLogs'));
+        batch.set(docRef, entry);
+      });
+
+      await batch.commit();
+      showToast('Données de test restaurées', 'success');
+    } catch (error) {
+      console.error("Error seeding test data:", error);
+      showToast('Erreur lors de la restauration', 'error');
+    }
   };
 
   const handleDeleteManualStats = async (id: string) => {
@@ -1529,6 +1564,13 @@ export default function App() {
           <div className="flex items-center gap-4">
             {activeTab === 'dashboard' && (
               <div className="hidden md:flex items-center gap-2">
+                <button
+                  onClick={seedTestData}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl text-sm font-semibold hover:bg-emerald-100 transition-colors"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Restaurer données test
+                </button>
                 {isDashboardEditMode && (
                   <button 
                     onClick={() => {
@@ -3814,7 +3856,7 @@ export default function App() {
             <div className="p-6 bg-slate-50 border-t border-slate-100 max-h-60 overflow-y-auto">
               <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Saisies récentes</h4>
               <div className="space-y-2">
-                {dailyLogs.slice(0, 10).map(log => (
+                {dailyLogs.slice(0, 20).map(log => (
                   <div key={log.id} className="bg-white p-3 rounded-xl border border-slate-200 flex justify-between items-center group">
                     <div>
                       <div className="text-xs font-bold text-slate-700">{format(new Date(log.date), 'dd MMMM', { locale: fr })}</div>
