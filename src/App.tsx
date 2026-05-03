@@ -13,6 +13,7 @@ import {
   MoreHorizontal,
   ArrowUpRight,
   ChevronRight,
+  ChevronLeft,
   Filter,
   LayoutDashboard,
   UserCheck,
@@ -515,6 +516,7 @@ export default function App() {
   
   // Manual Stats
   const [isManualStatsModalOpen, setIsManualStatsModalOpen] = useState(false);
+  const [isContactStatsModalOpen, setIsContactStatsModalOpen] = useState(false);
   const [isDailyLogModalOpen, setIsDailyLogModalOpen] = useState(false);
   const [editingManualStats, setEditingManualStats] = useState<ManualStats | null>(null);
   const [editingDailyLog, setEditingDailyLog] = useState<DailyLog | null>(null);
@@ -1446,6 +1448,38 @@ export default function App() {
             <ClipboardList className="w-4 h-4" />
             Vérification Saisies
           </button>
+          
+          <div className="mt-4 mx-4 p-3 bg-amber-50/50 border border-amber-100 rounded-xl">
+            <button
+              onClick={() => {
+                const now = new Date();
+                const dateStr = now.toISOString().split('T')[0];
+                setEditingManualStats({
+                  period_start: dateStr,
+                  period_type: 'week',
+                  totalContacts: 0,
+                  contactsDigital: 0,
+                  contactsNonDigital: 0,
+                  appointmentsTaken: 0,
+                  appointmentsProspect: 0,
+                  appointmentsSetter: 0,
+                  showedUp: 0,
+                  noShow: 0,
+                  cancelled: 0,
+                  signed: 0,
+                  notSigned: 0,
+                  totalCalls: 0,
+                  totalPickups: 0,
+                  notes: ''
+                });
+                setIsManualStatsModalOpen(true);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors bg-white border border-amber-200 text-amber-700 hover:bg-amber-100/50 shadow-sm"
+            >
+              <FileText className="w-4 h-4 text-amber-600" />
+              Saisie additionnelle
+            </button>
+          </div>
 
           {/* Reminders Section */}
           <div className="mt-8 px-4">
@@ -1639,10 +1673,9 @@ export default function App() {
             <button 
               onClick={() => {
                 const now = new Date();
-                const dateStr = now.toISOString().split('T')[0];
                 setEditingManualStats({
-                  period_start: dateStr,
-                  period_type: 'week',
+                  period_start: format(now, 'yyyy-MM'),
+                  period_type: 'month',
                   totalContacts: 0,
                   contactsDigital: 0,
                   contactsNonDigital: 0,
@@ -1658,12 +1691,12 @@ export default function App() {
                   totalPickups: 0,
                   notes: ''
                 });
-                setIsManualStatsModalOpen(true);
+                setIsContactStatsModalOpen(true);
               }}
               className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-sm"
             >
               <FileText className="w-4 h-4" />
-              Saisie additionnelle
+              Saisie Contacts
             </button>
             <button 
               onClick={() => setIsClientModalOpen(true)}
@@ -2584,122 +2617,212 @@ export default function App() {
             <div className="p-4 md:p-8 space-y-6 md:space-y-8">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                  <h3 className="text-xl font-bold text-slate-800">Historique des Saisies</h3>
-                  <p className="text-sm text-slate-500">Vérifiez la provenance et le détail de vos statistiques</p>
+                  <h3 className="text-xl font-bold text-slate-800">Vérification Saisies par Mois</h3>
+                  <p className="text-sm text-slate-500">Cliquez sur un mois pour voir le détail de ses statistiques et vérifier la provenance</p>
                 </div>
               </div>
 
-              <div className="glass-card shadow-sm border border-slate-200">
-                <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                  <h4 className="font-bold text-slate-800">Saisies de la période ({format(new Date(dateRange.startDate), 'dd MMM y', { locale: fr })} - {format(new Date(dateRange.endDate), 'dd MMM y', { locale: fr })})</h4>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50/50">
-                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Type / Origine</th>
-                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date / Période</th>
-                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Contacts (Dig/Non-Dig)</th>
-                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">RDV Pris / Venus</th>
-                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Signés / Refus</th>
-                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {dailyLogs
-                        .filter(log => log.date >= dateRange.startDate && log.date <= dateRange.endDate)
-                        .map(log => {
-                          const totalDailyContacts = log.totalContacts !== undefined ? log.totalContacts : ((log.digital || 0) + (log.nonDigital || 0));
-                          return (
-                            <tr key={`daily-${log.id}`} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="px-4 py-3">
-                                <span className="inline-flex items-center px-2 py-1 rounded bg-indigo-50 text-indigo-700 text-xs font-semibold">
-                                  Saisie Quotidienne
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="text-sm font-semibold text-slate-700">{format(new Date(log.date), 'dd MMM yyyy', { locale: fr })}</div>
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <span className="text-sm font-bold text-slate-700">{totalDailyContacts}</span>
-                                <span className="text-xs text-slate-400 ml-1">({log.digital || 0}/{log.nonDigital || 0})</span>
-                              </td>
-                              <td className="px-4 py-3 text-center text-sm text-slate-600">
-                                {log.appointments || 0} / {log.showedUp || 0}
-                              </td>
-                              <td className="px-4 py-3 text-center text-sm text-slate-600">
-                                {log.signed || 0} / {log.notSigned || 0}
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <button 
-                                  onClick={() => setEditingDailyLog(log)}
-                                  className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 flex-shrink-0 transition-colors rounded-lg"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      
-                      {manualStats
-                        .filter(stat => {
-                          const isMonth = stat.period_type === 'month';
-                          if (isMonth) {
-                            return stat.period_start.startsWith(dateRange.startDate.substring(0, 7));
-                          }
-                          return stat.period_start >= dateRange.startDate && stat.period_start <= dateRange.endDate;
-                        })
-                        .map(stat => (
-                          <tr key={`manual-${stat.id}`} className="hover:bg-slate-50/50 transition-colors bg-amber-50/20">
-                            <td className="px-4 py-3">
-                              <span className="inline-flex items-center px-2 py-1 rounded bg-amber-100 text-amber-800 text-xs font-semibold">
-                                Saisie Additionnelle ({stat.period_type === 'month' ? 'Mensuel' : stat.period_type === 'week' ? 'Hebdomadaire' : 'Journalier'})
-                              </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="text-sm font-semibold text-slate-700">{stat.period_start}</div>
-                            </td>
-                            <td className="px-4 py-3 text-center flex items-center justify-center gap-1">
-                              <span className="text-sm font-bold text-slate-700">{stat.totalContacts || 0}</span>
-                              {(stat.contactsDigital !== undefined || stat.contactsNonDigital !== undefined) && (
-                                <span className="text-xs text-slate-400 ml-1">({stat.contactsDigital || 0}/{stat.contactsNonDigital || 0})</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm text-slate-600">
-                              {stat.appointmentsTaken || 0} / {stat.showedUp || 0}
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm text-slate-600">
-                              {stat.signed || 0} / {stat.notSigned || 0}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <button 
-                                onClick={() => {
-                                  setEditingManualStats(stat);
-                                  setIsManualStatsModalOpen(true);
-                                }}
-                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 flex-shrink-0 transition-colors rounded-lg"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+              <div className="space-y-4">
+                {(() => {
+                  // Merge all entries
+                  const allEntries = [
+                    ...dailyLogs.map(log => ({ 
+                      type: 'daily', 
+                      data: log, 
+                      sortDate: log.date, 
+                      month: log.date.substring(0, 7) // 2026-04
+                    })),
+                    ...manualStats.map(stat => ({ 
+                      type: 'manual', 
+                      data: stat, 
+                      sortDate: stat.period_type === 'month' ? `${stat.period_start}-01` : stat.period_start, 
+                      month: stat.period_type === 'month' ? stat.period_start.substring(0, 7) : stat.period_start.substring(0, 7)
+                    }))
+                  ];
 
-                      {dailyLogs.filter(log => log.date >= dateRange.startDate && log.date <= dateRange.endDate).length === 0 && 
-                       manualStats.filter(stat => stat.period_type === 'month' ? stat.period_start.startsWith(dateRange.startDate.substring(0, 7)) : stat.period_start >= dateRange.startDate && stat.period_start <= dateRange.endDate).length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
-                            Aucune saisie trouvée pour cette période.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                  // Group by month
+                  const groupedByMonth = allEntries.reduce((acc, current) => {
+                    if (!acc[current.month]) acc[current.month] = [];
+                    acc[current.month].push(current);
+                    return acc;
+                  }, {} as Record<string, typeof allEntries>);
+
+                  const sortedMonths = Object.keys(groupedByMonth).sort((a, b) => b.localeCompare(a));
+
+                  if (sortedMonths.length === 0) {
+                    return (
+                      <div className="glass-card p-8 text-center text-slate-500">
+                        Aucune saisie trouvée.
+                      </div>
+                    );
+                  }
+
+                  return sortedMonths.map(month => {
+                    const entries = groupedByMonth[month].sort((a, b) => b.sortDate.localeCompare(a.sortDate));
+                    
+                    // Summarize
+                    let totalContacts = 0;
+                    let totalAppointments = 0;
+                    let totalShowedUp = 0;
+                    let totalNoShow = 0;
+                    let totalSigned = 0;
+                    let totalNotSigned = 0;
+                    
+                    entries.forEach(item => {
+                      if (item.type === 'daily') {
+                        const log = item.data as DailyLog;
+                        totalContacts += log.totalContacts !== undefined ? log.totalContacts : ((log.digital || 0) + (log.nonDigital || 0));
+                        totalAppointments += log.appointments || 0;
+                        totalShowedUp += log.showedUp || 0;
+                        totalNoShow += log.noShow || 0;
+                        totalSigned += log.signed || 0;
+                        totalNotSigned += log.notSigned || 0;
+                      } else {
+                        const stat = item.data as ManualStats;
+                        totalContacts += stat.totalContacts || 0;
+                        totalAppointments += stat.appointmentsTaken || 0;
+                        totalShowedUp += stat.showedUp || 0;
+                        totalNoShow += stat.noShow || 0;
+                        totalSigned += stat.signed || 0;
+                        totalNotSigned += stat.notSigned || 0;
+                      }
+                    });
+
+                    return (
+                      <details key={month} className="glass-card shadow-sm border border-slate-200 group overflow-hidden">
+                        <summary className="p-4 bg-white hover:bg-slate-50 transition-colors cursor-pointer list-none flex items-center justify-between">
+                          <div>
+                            <h4 className="font-bold text-lg text-slate-800 capitalize">
+                              {format(new Date(`${month}-01`), 'MMMM yyyy', { locale: fr })}
+                            </h4>
+                            <p className="text-sm font-medium text-slate-500 mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                              <span><strong className="text-indigo-600">{totalContacts}</strong> Contacts</span>
+                              <span>•</span>
+                              <span><strong className="text-amber-600">{totalAppointments}</strong> RDV pris</span>
+                              <span>•</span>
+                              <span><strong className="text-emerald-600">{totalShowedUp}</strong> Venus</span>
+                              <span>•</span>
+                              <span><strong className="text-rose-600">{totalNoShow}</strong> Non venus</span>
+                              <span>•</span>
+                              <span><strong className="text-emerald-700">{totalSigned}</strong> Signés</span>
+                            </p>
+                          </div>
+                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-open:rotate-180 transition-transform">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                          </div>
+                        </summary>
+                        <div className="border-t border-slate-100 overflow-x-auto bg-slate-50/50">
+                          <table className="w-full text-left border-collapse min-w-[700px]">
+                            <thead>
+                              <tr className="bg-slate-100/50">
+                                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200">Date/Période</th>
+                                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200">Type de saisie</th>
+                                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center border-b border-slate-200">Contacts</th>
+                                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center border-b border-slate-200">RDV Pris</th>
+                                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center border-b border-slate-200">Venus / No-show</th>
+                                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center border-b border-slate-200">Signés / Refus</th>
+                                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right border-b border-slate-200">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200 bg-white">
+                              {entries.map((item, index) => {
+                                if (item.type === 'daily') {
+                                  const log = item.data as DailyLog;
+                                  const totalDailyContacts = log.totalContacts !== undefined ? log.totalContacts : ((log.digital || 0) + (log.nonDigital || 0));
+                                  return (
+                                    <tr key={`daily-${log.id}-${index}`} className="hover:bg-slate-50 transition-colors">
+                                      <td className="px-4 py-3 whitespace-nowrap">
+                                        <div className="text-sm font-semibold text-slate-700">{format(new Date(log.date), 'dd MMM yyyy', { locale: fr })}</div>
+                                      </td>
+                                      <td className="px-4 py-3 whitespace-nowrap">
+                                        <span className="inline-flex items-center px-2 py-1 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold uppercase tracking-wider">
+                                          Saisie Quotidienne
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-center whitespace-nowrap">
+                                        <div className="flex flex-col items-center justify-center">
+                                          <span className="text-sm font-bold text-slate-800">{totalDailyContacts}</span>
+                                          <span className="text-[10px] text-slate-400 font-medium">{log.digital || 0} Dig / {log.nonDigital || 0} N-D</span>
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-3 text-center whitespace-nowrap text-sm font-semibold text-amber-600">
+                                        {log.appointments || 0}
+                                      </td>
+                                      <td className="px-4 py-3 text-center whitespace-nowrap text-sm text-slate-600 font-medium">
+                                        <span className="text-emerald-600">{log.showedUp || 0}</span> / <span className="text-rose-600">{log.noShow || 0}</span>
+                                      </td>
+                                      <td className="px-4 py-3 text-center whitespace-nowrap text-sm text-slate-600 font-medium">
+                                        <span className="text-emerald-600">{log.signed || 0}</span> / <span>{log.notSigned || 0}</span>
+                                      </td>
+                                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                                        <button 
+                                          onClick={() => setEditingDailyLog(log)}
+                                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors rounded-md border border-transparent hover:border-indigo-100 inline-flex items-center gap-1 text-xs font-semibold"
+                                        >
+                                          <Edit2 className="w-3.5 h-3.5" />
+                                          Éditer
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                } else {
+                                  const stat = item.data as ManualStats;
+                                  return (
+                                    <tr key={`manual-${stat.id}-${index}`} className="hover:bg-amber-50/10 transition-colors bg-amber-50/30">
+                                      <td className="px-4 py-3 whitespace-nowrap">
+                                        <div className="text-sm font-semibold text-slate-700">
+                                          {stat.period_type === 'month' ? format(new Date(stat.period_start + '-01'), 'MMMM yyyy', { locale: fr }) : stat.period_start}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-3 whitespace-nowrap">
+                                        <span className="inline-flex items-center px-2 py-1 rounded-md bg-amber-100 border border-amber-200 text-amber-800 text-[10px] font-bold uppercase tracking-wider">
+                                          Saisie {stat.period_type === 'month' ? 'Mensuelle' : 'Hebdo'}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-center whitespace-nowrap">
+                                        <div className="flex flex-col items-center justify-center">
+                                          <span className="text-sm font-bold text-slate-800">{stat.totalContacts || 0}</span>
+                                          {(stat.contactsDigital !== undefined || stat.contactsNonDigital !== undefined) && (
+                                            <span className="text-[10px] text-slate-400 font-medium">{stat.contactsDigital || 0} Dig / {stat.contactsNonDigital || 0} N-D</span>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-3 text-center whitespace-nowrap text-sm font-semibold text-amber-600">
+                                        {stat.appointmentsTaken || 0}
+                                      </td>
+                                      <td className="px-4 py-3 text-center whitespace-nowrap text-sm text-slate-600 font-medium">
+                                        <span className="text-emerald-600">{stat.showedUp || 0}</span> / <span className="text-rose-600">{stat.noShow || 0}</span>
+                                      </td>
+                                      <td className="px-4 py-3 text-center whitespace-nowrap text-sm text-slate-600 font-medium">
+                                        <span className="text-emerald-600">{stat.signed || 0}</span> / <span>{stat.notSigned || 0}</span>
+                                      </td>
+                                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                                        <button 
+                                          onClick={() => {
+                                            setEditingManualStats(stat);
+                                            setIsManualStatsModalOpen(true);
+                                          }}
+                                          className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-100 transition-colors rounded-md border border-transparent hover:border-amber-200 inline-flex items-center gap-1 text-xs font-semibold"
+                                        >
+                                          <Edit2 className="w-3.5 h-3.5" />
+                                          Éditer
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                }
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    );
+                  });
+                })()}
               </div>
             </div>
           )}
+
         </div>
 
         {/* Mobile Bottom Nav */}
@@ -3282,6 +3405,151 @@ export default function App() {
           </div>
         </div>
       )}
+      {/* Modal - Saisie Contacts */}
+      {isContactStatsModalOpen && editingManualStats && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Saisie Contacts</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Ajoutez le volume de vos contacts mensuels</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setIsContactStatsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <form 
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!editingManualStats) return;
+                try {
+                  if (editingManualStats.id) {
+                    const updates = { ...editingManualStats };
+                    delete (updates as any).id;
+                    await updateDoc(doc(db, 'manualStats', editingManualStats.id.toString()), updates);
+                  } else {
+                    await addDoc(collection(db, 'manualStats'), {
+                      ...editingManualStats,
+                      uid: user?.uid || 'admin_user'
+                    });
+                  }
+                  setIsContactStatsModalOpen(false);
+                } catch (error) {
+                  handleFirestoreError(error, OperationType.WRITE, 'manualStats');
+                }
+              }} 
+              className="p-6 space-y-6"
+            >
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase">Mois</label>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (!editingManualStats.period_start) return;
+                        const [year, month] = editingManualStats.period_start.split('-');
+                        let y = parseInt(year);
+                        let m = parseInt(month) - 1;
+                        if (m < 1) { m = 12; y--; }
+                        setEditingManualStats({...editingManualStats, period_start: `${y}-${m.toString().padStart(2, '0')}`});
+                      }}
+                      className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-500 transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <input 
+                      type="month" 
+                      required
+                      className="flex-1 w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      value={editingManualStats.period_start || ''}
+                      onChange={(e) => setEditingManualStats({...editingManualStats, period_start: e.target.value})}
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (!editingManualStats.period_start) return;
+                        const [year, month] = editingManualStats.period_start.split('-');
+                        let y = parseInt(year);
+                        let m = parseInt(month) + 1;
+                        if (m > 12) { m = 1; y++; }
+                        setEditingManualStats({...editingManualStats, period_start: `${y}-${m.toString().padStart(2, '0')}`});
+                      }}
+                      className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-500 transition-colors"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400">Période d'application de la saisie</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase">Contacts Digitaux</label>
+                    <input 
+                      type="number"
+                      min="0"
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      value={editingManualStats.contactsDigital || ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setEditingManualStats({
+                          ...editingManualStats, 
+                          contactsDigital: val, 
+                          totalContacts: val + (editingManualStats.contactsNonDigital || 0)
+                        });
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase">Contacts Non Digitaux</label>
+                    <input 
+                      type="number"
+                      min="0"
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      value={editingManualStats.contactsNonDigital || ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setEditingManualStats({
+                          ...editingManualStats, 
+                          contactsNonDigital: val,
+                          totalContacts: val + (editingManualStats.contactsDigital || 0)
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-600">Total Contacts</span>
+                <span className="text-lg font-bold text-slate-900">
+                  {(editingManualStats.contactsDigital || 0) + (editingManualStats.contactsNonDigital || 0)}
+                </span>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-3 border-t border-slate-100">
+                <button 
+                  type="button"
+                  onClick={() => setIsContactStatsModalOpen(false)}
+                  className="px-5 py-2 text-slate-500 font-medium hover:bg-slate-50 rounded-xl transition-colors"
+                >
+                  Annuler
+                </button>
+                <button 
+                  type="submit"
+                  className="px-5 py-2 bg-slate-900 text-white font-medium rounded-xl hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200"
+                >
+                  Enregistrer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modal - Saisie Rapide / Ajustements */}
       {isManualStatsModalOpen && editingManualStats && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
