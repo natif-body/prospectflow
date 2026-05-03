@@ -1457,6 +1457,7 @@ export default function App() {
                 setEditingManualStats({
                   period_start: dateStr,
                   period_type: 'week',
+                  source_type: 'additionnelle',
                   totalContacts: 0,
                   contactsDigital: 0,
                   contactsNonDigital: 0,
@@ -1676,6 +1677,7 @@ export default function App() {
                 setEditingManualStats({
                   period_start: format(now, 'yyyy-MM'),
                   period_type: 'month',
+                  source_type: 'contact',
                   totalContacts: 0,
                   contactsDigital: 0,
                   contactsNonDigital: 0,
@@ -1957,7 +1959,11 @@ export default function App() {
                               <button 
                                 onClick={() => {
                                   setEditingManualStats(entry);
-                                  setIsManualStatsModalOpen(true);
+                                  if (entry.source_type === 'contact') {
+                                    setIsContactStatsModalOpen(true);
+                                  } else {
+                                    setIsManualStatsModalOpen(true);
+                                  }
                                 }}
                                 className="p-1.5 hover:bg-indigo-50 rounded-lg text-indigo-400 hover:text-indigo-600 transition-colors"
                               >
@@ -2641,6 +2647,7 @@ export default function App() {
                       setEditingManualStats({
                         period_start: dateStr,
                         period_type: 'week',
+                        source_type: 'additionnelle',
                         totalContacts: 0,
                         contactsDigital: 0,
                         contactsNonDigital: 0,
@@ -2838,7 +2845,10 @@ export default function App() {
                                       <td className="px-4 py-3 text-right whitespace-nowrap">
                                         <div className="flex items-center justify-end gap-1">
                                           <button 
-                                            onClick={() => setEditingDailyLog(log)}
+                                            onClick={() => {
+                                              setEditingDailyLog(log);
+                                              setIsDailyLogModalOpen(true);
+                                            }}
                                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors rounded-md border border-transparent hover:border-indigo-100 inline-flex items-center gap-1 text-xs font-semibold"
                                           >
                                             <Edit2 className="w-3.5 h-3.5" />
@@ -2895,7 +2905,7 @@ export default function App() {
                                       </td>
                                       <td className="px-4 py-3 whitespace-nowrap">
                                         <span className="inline-flex items-center px-2 py-1 rounded-md bg-amber-100 border border-amber-200 text-amber-800 text-[10px] font-bold uppercase tracking-wider">
-                                          Saisie {stat.period_type === 'month' ? 'Mensuelle' : 'Hebdo'}
+                                          {stat.source_type === 'contact' ? 'Saisie Contacts' : stat.source_type === 'additionnelle' ? 'Saisie Additionnelle' : `Saisie ${stat.period_type === 'month' ? 'Mensuelle' : 'Hebdo'}`}
                                         </span>
                                       </td>
                                       <td className="px-4 py-3 text-center whitespace-nowrap">
@@ -2920,7 +2930,11 @@ export default function App() {
                                           <button 
                                             onClick={() => {
                                               setEditingManualStats(stat);
-                                              setIsManualStatsModalOpen(true);
+                                              if (stat.source_type === 'contact') {
+                                                setIsContactStatsModalOpen(true);
+                                              } else {
+                                                setIsManualStatsModalOpen(true);
+                                              }
                                             }}
                                             className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-100 transition-colors rounded-md border border-transparent hover:border-amber-200 inline-flex items-center gap-1 text-xs font-semibold"
                                           >

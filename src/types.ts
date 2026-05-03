@@ -126,6 +126,7 @@ export interface ManualStats {
   id?: string;
   period_start: string;
   period_type: 'day' | 'week' | 'month';
+  source_type?: 'additionnelle' | 'contact' | 'mensuelle' | 'hebdo';
   totalContacts: number;
   appointmentsTaken: number;
   appointmentsProspect: number;
