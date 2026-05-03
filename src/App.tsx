@@ -38,7 +38,8 @@ import {
   Maximize2,
   Minimize2,
   Settings,
-  RotateCcw
+  RotateCcw,
+  ClipboardList
 } from 'lucide-react';
 import { 
   PieChart, 
@@ -453,7 +454,7 @@ export default function App() {
 
   const stats = useStats(clients, formulas, manualStats, dailyLogs, dateRange.startDate, dateRange.endDate);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'relances' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'relances' | 'settings' | 'recap'>('dashboard');
   const [showArchivedRelances, setShowArchivedRelances] = useState(false);
   const [isDashboardEditMode, setIsDashboardEditMode] = useState(false);
   const [dashboardLayout, setDashboardLayout] = useState<WidgetConfig[]>(() => {
@@ -1435,6 +1436,16 @@ export default function App() {
             <Filter className="w-4 h-4" />
             Paramètres
           </button>
+          <button
+            onClick={() => setActiveTab('recap')}
+            className={cn(
+              "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors",
+              activeTab === 'recap' ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"
+            )}
+          >
+            <ClipboardList className="w-4 h-4" />
+            Vérification Saisies
+          </button>
 
           {/* Reminders Section */}
           <div className="mt-8 px-4">
@@ -1478,9 +1489,10 @@ export default function App() {
             <h2 className="text-sm md:text-lg font-semibold text-slate-800 truncate max-w-[120px] md:max-w-none">
               {activeTab === 'dashboard' ? 'Tableau de bord' : 
                activeTab === 'clients' ? 'Base Membres' : 
+               activeTab === 'recap' ? 'Vérification Saisies' :
                activeTab === 'relances' ? 'Relances' : 'Paramètres'}
             </h2>
-            {activeTab === 'dashboard' && (
+            {(activeTab === 'dashboard' || activeTab === 'recap') && (
               <div className="flex items-center gap-1 md:gap-2 bg-slate-100 p-1 rounded-xl ml-2 md:ml-4 overflow-x-auto no-scrollbar">
                 {[
                   { id: 'today', label: "Auj." },
@@ -2567,21 +2579,155 @@ export default function App() {
               </div>
             </div>
           )}
+          
+          {activeTab === 'recap' && (
+            <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800">Historique des Saisies</h3>
+                  <p className="text-sm text-slate-500">Vérifiez la provenance et le détail de vos statistiques</p>
+                </div>
+              </div>
+
+              <div className="glass-card shadow-sm border border-slate-200">
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                  <h4 className="font-bold text-slate-800">Saisies de la période ({format(new Date(dateRange.startDate), 'dd MMM y', { locale: fr })} - {format(new Date(dateRange.endDate), 'dd MMM y', { locale: fr })})</h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50/50">
+                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Type / Origine</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date / Période</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Contacts (Dig/Non-Dig)</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">RDV Pris / Venus</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Signés / Refus</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {dailyLogs
+                        .filter(log => log.date >= dateRange.startDate && log.date <= dateRange.endDate)
+                        .map(log => {
+                          const totalDailyContacts = log.totalContacts !== undefined ? log.totalContacts : ((log.digital || 0) + (log.nonDigital || 0));
+                          return (
+                            <tr key={`daily-${log.id}`} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-4 py-3">
+                                <span className="inline-flex items-center px-2 py-1 rounded bg-indigo-50 text-indigo-700 text-xs font-semibold">
+                                  Saisie Quotidienne
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="text-sm font-semibold text-slate-700">{format(new Date(log.date), 'dd MMM yyyy', { locale: fr })}</div>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="text-sm font-bold text-slate-700">{totalDailyContacts}</span>
+                                <span className="text-xs text-slate-400 ml-1">({log.digital || 0}/{log.nonDigital || 0})</span>
+                              </td>
+                              <td className="px-4 py-3 text-center text-sm text-slate-600">
+                                {log.appointments || 0} / {log.showedUp || 0}
+                              </td>
+                              <td className="px-4 py-3 text-center text-sm text-slate-600">
+                                {log.signed || 0} / {log.notSigned || 0}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <button 
+                                  onClick={() => setEditingDailyLog(log)}
+                                  className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 flex-shrink-0 transition-colors rounded-lg"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      
+                      {manualStats
+                        .filter(stat => {
+                          const isMonth = stat.period_type === 'month';
+                          if (isMonth) {
+                            return stat.period_start.startsWith(dateRange.startDate.substring(0, 7));
+                          }
+                          return stat.period_start >= dateRange.startDate && stat.period_start <= dateRange.endDate;
+                        })
+                        .map(stat => (
+                          <tr key={`manual-${stat.id}`} className="hover:bg-slate-50/50 transition-colors bg-amber-50/20">
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center px-2 py-1 rounded bg-amber-100 text-amber-800 text-xs font-semibold">
+                                Saisie Additionnelle ({stat.period_type === 'month' ? 'Mensuel' : stat.period_type === 'week' ? 'Hebdomadaire' : 'Journalier'})
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-sm font-semibold text-slate-700">{stat.period_start}</div>
+                            </td>
+                            <td className="px-4 py-3 text-center flex items-center justify-center gap-1">
+                              <span className="text-sm font-bold text-slate-700">{stat.totalContacts || 0}</span>
+                              {(stat.contactsDigital !== undefined || stat.contactsNonDigital !== undefined) && (
+                                <span className="text-xs text-slate-400 ml-1">({stat.contactsDigital || 0}/{stat.contactsNonDigital || 0})</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center text-sm text-slate-600">
+                              {stat.appointmentsTaken || 0} / {stat.showedUp || 0}
+                            </td>
+                            <td className="px-4 py-3 text-center text-sm text-slate-600">
+                              {stat.signed || 0} / {stat.notSigned || 0}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button 
+                                onClick={() => {
+                                  setEditingManualStats(stat);
+                                  setIsManualStatsModalOpen(true);
+                                }}
+                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 flex-shrink-0 transition-colors rounded-lg"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+
+                      {dailyLogs.filter(log => log.date >= dateRange.startDate && log.date <= dateRange.endDate).length === 0 && 
+                       manualStats.filter(stat => stat.period_type === 'month' ? stat.period_start.startsWith(dateRange.startDate.substring(0, 7)) : stat.period_start >= dateRange.startDate && stat.period_start <= dateRange.endDate).length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
+                            Aucune saisie trouvée pour cette période.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Mobile Bottom Nav */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-3 flex justify-between items-center z-50">
-          <button onClick={() => setActiveTab('dashboard')} className={cn("flex flex-col items-center gap-1", activeTab === 'dashboard' ? "text-indigo-600" : "text-slate-400")}>
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-3 flex justify-between items-center z-50">
+          <button onClick={() => setActiveTab('dashboard')} className={cn("flex flex-col items-center gap-1 w-1/5", activeTab === 'dashboard' ? "text-indigo-600" : "text-slate-400")}>
             <LayoutDashboard className="w-5 h-5" />
-            <span className="text-[10px] font-medium">Dashboard</span>
+            <span className="text-[9px] font-medium truncate w-full text-center">Dashboard</span>
           </button>
-          <button onClick={() => setActiveTab('clients')} className={cn("flex flex-col items-center gap-1", activeTab === 'clients' ? "text-indigo-600" : "text-slate-400")}>
+          <button onClick={() => setActiveTab('clients')} className={cn("flex flex-col items-center gap-1 w-1/5", activeTab === 'clients' ? "text-indigo-600" : "text-slate-400")}>
             <Users className="w-5 h-5" />
-            <span className="text-[10px] font-medium">Membres</span>
+            <span className="text-[9px] font-medium truncate w-full text-center">Membres</span>
           </button>
-          <button onClick={() => setActiveTab('settings')} className={cn("flex flex-col items-center gap-1", activeTab === 'settings' ? "text-indigo-600" : "text-slate-400")}>
+          <button onClick={() => setActiveTab('relances')} className={cn("flex flex-col items-center gap-1 w-1/5", activeTab === 'relances' ? "text-indigo-600" : "text-slate-400")}>
+            <div className="relative">
+              <Clock className="w-5 h-5" />
+              {relances.filter(r => r.status === 'PENDING').length > 0 && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border border-white"></span>
+              )}
+            </div>
+            <span className="text-[9px] font-medium truncate w-full text-center">Relances</span>
+          </button>
+          <button onClick={() => setActiveTab('recap')} className={cn("flex flex-col items-center gap-1 w-1/5", activeTab === 'recap' ? "text-indigo-600" : "text-slate-400")}>
+            <ClipboardList className="w-5 h-5" />
+            <span className="text-[9px] font-medium truncate w-full text-center">Saisies</span>
+          </button>
+          <button onClick={() => setActiveTab('settings')} className={cn("flex flex-col items-center gap-1 w-1/5", activeTab === 'settings' ? "text-indigo-600" : "text-slate-400")}>
             <Filter className="w-5 h-5" />
-            <span className="text-[10px] font-medium">Paramètres</span>
+            <span className="text-[9px] font-medium truncate w-full text-center">Paramètres</span>
           </button>
         </div>
       </main>
@@ -3837,6 +3983,7 @@ export default function App() {
                       <div className="text-xs font-bold text-slate-700">{format(new Date(log.date), 'dd MMMM', { locale: fr })}</div>
                       <div className="text-[10px] text-slate-400">
                         {log.appointments} RDV • {log.showedUp} Venus • {log.signed} Signés • {log.noShow} Non Venus
+                        {log.nonDigital > 0 ? ` • ${log.nonDigital} Non Digit${log.nonDigital > 1 ? 'aux' : 'al'}` : ''}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
