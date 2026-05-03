@@ -423,8 +423,8 @@ export default function App() {
     const now = new Date();
     const currentYear = now.getFullYear();
     
-    // Generate for current and previous year
-    for (let year = currentYear; year >= currentYear - 1; year--) {
+    // Generate for current and previous 3 years
+    for (let year = currentYear; year >= currentYear - 3; year--) {
       for (let week = 52; week >= 1; week--) {
         const d = new Date(year, 0, 1 + (week - 1) * 7);
         const day = d.getDay();
@@ -441,7 +441,7 @@ export default function App() {
   };
 
   const { user, isAuthReady, authError, loading, clients, formulas, relances, manualStats, dailyLogs, login, logout } = useFirebase();
-  
+
   // Date Range
   const [dateRange, setDateRange] = useState({
     startDate: '',
@@ -700,7 +700,7 @@ export default function App() {
   const generateMonths = () => {
     const months = [];
     const now = new Date();
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 36; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       months.push({
         value: format(d, 'yyyy-MM'),
@@ -1449,7 +1449,7 @@ export default function App() {
             Vérification Saisies
           </button>
           
-          <div className="mt-4 mx-4 p-3 bg-amber-50/50 border border-amber-100 rounded-xl">
+          <div className="mt-4 mx-4 p-3 bg-amber-50 border border-amber-100 rounded-xl">
             <button
               onClick={() => {
                 const now = new Date();
@@ -1474,7 +1474,7 @@ export default function App() {
                 });
                 setIsManualStatsModalOpen(true);
               }}
-              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors bg-white border border-amber-200 text-amber-700 hover:bg-amber-100/50 shadow-sm"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors bg-white border border-amber-200 text-amber-700 hover:bg-amber-100/50 shadow-sm"
             >
               <FileText className="w-4 h-4 text-amber-600" />
               Saisie additionnelle
@@ -1891,9 +1891,22 @@ export default function App() {
                             <div className="flex items-center gap-2">
                               <Calendar className="w-3.5 h-3.5 text-slate-400" />
                               <span className="text-sm font-medium text-slate-700">
-                                {entry.period_type === 'day' ? format(new Date(entry.period_start), 'dd MMM yyyy', { locale: fr }) : 
-                                 entry.period_type === 'week' ? `Semaine du ${format(new Date(entry.period_start), 'dd MMM', { locale: fr })}` :
-                                 format(new Date(entry.period_start), 'MMMM yyyy', { locale: fr })}
+                                {entry.period_type === 'day' 
+                                  ? (() => { try { return format(new Date(entry.period_start), 'dd MMM yyyy', { locale: fr }); } catch { return entry.period_start; } })()
+                                  : entry.period_type === 'week' 
+                                    ? (() => {
+                                        const safeP = entry.period_start || '';
+                                        if (safeP.includes('W')) {
+                                          try {
+                                            const [y, w] = safeP.split('-W');
+                                            const d = new Date(parseInt(y), 0, 1 + (parseInt(w) - 1) * 7);
+                                            return `Semaine du ${format(d, 'dd MMM', { locale: fr })}`;
+                                          } catch { return `Semaine ${safeP}`; }
+                                        }
+                                        try { return `Semaine du ${format(new Date(safeP), 'dd MMM', { locale: fr })}`; } catch { return safeP; }
+                                      })()
+                                    : (() => { try { return format(new Date(entry.period_start + '-01'), 'MMMM yyyy', { locale: fr }); } catch { return entry.period_start; } })()
+                                }
                               </span>
                             </div>
                           </td>
@@ -2620,6 +2633,37 @@ export default function App() {
                   <h3 className="text-xl font-bold text-slate-800">Vérification Saisies par Mois</h3>
                   <p className="text-sm text-slate-500">Cliquez sur un mois pour voir le détail de ses statistiques et vérifier la provenance</p>
                 </div>
+                <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+                  <button
+                    onClick={() => {
+                      const now = new Date();
+                      const dateStr = now.toISOString().split('T')[0];
+                      setEditingManualStats({
+                        period_start: dateStr,
+                        period_type: 'week',
+                        totalContacts: 0,
+                        contactsDigital: 0,
+                        contactsNonDigital: 0,
+                        appointmentsTaken: 0,
+                        appointmentsProspect: 0,
+                        appointmentsSetter: 0,
+                        showedUp: 0,
+                        noShow: 0,
+                        cancelled: 0,
+                        signed: 0,
+                        notSigned: 0,
+                        totalCalls: 0,
+                        totalPickups: 0,
+                        notes: ''
+                      });
+                      setIsManualStatsModalOpen(true);
+                    }}
+                    className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all bg-amber-100 border border-amber-300 text-amber-800 hover:bg-amber-200 shadow-md transform hover:-translate-y-0.5"
+                  >
+                    <FileText className="w-5 h-5 text-amber-600" />
+                    Nouvelle Saisie Additionnelle
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-4">
@@ -2632,12 +2676,43 @@ export default function App() {
                       sortDate: log.date, 
                       month: log.date.substring(0, 7) // 2026-04
                     })),
-                    ...manualStats.map(stat => ({ 
-                      type: 'manual', 
-                      data: stat, 
-                      sortDate: stat.period_type === 'month' ? `${stat.period_start}-01` : stat.period_start, 
-                      month: stat.period_type === 'month' ? stat.period_start.substring(0, 7) : stat.period_start.substring(0, 7)
-                    }))
+                    ...manualStats.map(stat => {
+                      const periodStartSafe = stat.period_start || '';
+                      let monthStr = periodStartSafe.substring(0, 7);
+                      if (stat.period_type === 'week') {
+                        if (!periodStartSafe.includes('W')) {
+                          try {
+                            const d = new Date(periodStartSafe);
+                            d.setDate(d.getDate() + 3);
+                            monthStr = d.toISOString().substring(0, 7);
+                          } catch(e) {}
+                        } else {
+                          try {
+                            const [year, week] = periodStartSafe.split('-W');
+                            const simpleDate = new Date(parseInt(year), 0, 1 + (parseInt(week) - 1) * 7);
+                            monthStr = simpleDate.toISOString().substring(0, 7);
+                          } catch(e) {}
+                        }
+                      }
+                      
+                      let sortDateStr = periodStartSafe;
+                      if (stat.period_type === 'month') {
+                        sortDateStr = `${periodStartSafe}-01`;
+                      } else if (stat.period_type === 'week' && periodStartSafe.includes('W')) {
+                        try {
+                          const [year, week] = periodStartSafe.split('-W');
+                          const simpleDate = new Date(parseInt(year), 0, 1 + (parseInt(week) - 1) * 7);
+                          sortDateStr = simpleDate.toISOString().split('T')[0];
+                        } catch(e) {}
+                      }
+
+                      return { 
+                        type: 'manual', 
+                        data: stat, 
+                        sortDate: sortDateStr, 
+                        month: monthStr
+                      };
+                    })
                   ];
 
                   // Group by month
@@ -2679,7 +2754,7 @@ export default function App() {
                         totalNotSigned += log.notSigned || 0;
                       } else {
                         const stat = item.data as ManualStats;
-                        totalContacts += stat.totalContacts || 0;
+                        totalContacts += stat.totalContacts !== undefined ? stat.totalContacts : ((stat.contactsDigital || 0) + (stat.contactsNonDigital || 0));
                         totalAppointments += stat.appointmentsTaken || 0;
                         totalShowedUp += stat.showedUp || 0;
                         totalNoShow += stat.noShow || 0;
@@ -2693,7 +2768,13 @@ export default function App() {
                         <summary className="p-4 bg-white hover:bg-slate-50 transition-colors cursor-pointer list-none flex items-center justify-between">
                           <div>
                             <h4 className="font-bold text-lg text-slate-800 capitalize">
-                              {format(new Date(`${month}-01`), 'MMMM yyyy', { locale: fr })}
+                              {(() => {
+                                try {
+                                  return format(new Date(`${month}-01`), 'MMMM yyyy', { locale: fr });
+                                } catch(e) {
+                                  return month;
+                                }
+                              })()}
                             </h4>
                             <p className="text-sm font-medium text-slate-500 mt-1 flex flex-wrap gap-x-4 gap-y-1">
                               <span><strong className="text-indigo-600">{totalContacts}</strong> Contacts</span>
@@ -2755,13 +2836,36 @@ export default function App() {
                                         <span className="text-emerald-600">{log.signed || 0}</span> / <span>{log.notSigned || 0}</span>
                                       </td>
                                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                                        <button 
-                                          onClick={() => setEditingDailyLog(log)}
-                                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors rounded-md border border-transparent hover:border-indigo-100 inline-flex items-center gap-1 text-xs font-semibold"
-                                        >
-                                          <Edit2 className="w-3.5 h-3.5" />
-                                          Éditer
-                                        </button>
+                                        <div className="flex items-center justify-end gap-1">
+                                          <button 
+                                            onClick={() => setEditingDailyLog(log)}
+                                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors rounded-md border border-transparent hover:border-indigo-100 inline-flex items-center gap-1 text-xs font-semibold"
+                                          >
+                                            <Edit2 className="w-3.5 h-3.5" />
+                                            Éditer
+                                          </button>
+                                          <button 
+                                            onClick={() => {
+                                              setConfirmDialog({
+                                                isOpen: true,
+                                                title: "Supprimer la saisie",
+                                                message: "Êtes-vous sûr de vouloir supprimer cette saisie de journée ? Cette action est irréversible.",
+                                                onConfirm: async () => {
+                                                  try {
+                                                    await deleteDoc(doc(db, 'dailyLogs', log.id));
+                                                    setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                                                  } catch (e) {
+                                                    handleFirestoreError(e, OperationType.DELETE, 'dailyLogs');
+                                                  }
+                                                }
+                                              });
+                                            }}
+                                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-100 transition-colors rounded-md border border-transparent hover:border-rose-200 inline-flex items-center"
+                                            title="Supprimer"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
                                       </td>
                                     </tr>
                                   );
@@ -2771,7 +2875,22 @@ export default function App() {
                                     <tr key={`manual-${stat.id}-${index}`} className="hover:bg-amber-50/10 transition-colors bg-amber-50/30">
                                       <td className="px-4 py-3 whitespace-nowrap">
                                         <div className="text-sm font-semibold text-slate-700">
-                                          {stat.period_type === 'month' ? format(new Date(stat.period_start + '-01'), 'MMMM yyyy', { locale: fr }) : stat.period_start}
+                                          {stat.period_type === 'month' 
+                                            ? (() => { try { return format(new Date((stat.period_start || '') + '-01'), 'MMMM yyyy', { locale: fr }) } catch { return stat.period_start; } })()
+                                            : stat.period_type === 'week'
+                                              ? (() => {
+                                                  const periodStartSafe = stat.period_start || '';
+                                                  if (periodStartSafe.includes('W')) {
+                                                    try {
+                                                      const [year, week] = periodStartSafe.split('-W');
+                                                      const d = new Date(parseInt(year), 0, 1 + (parseInt(week) - 1) * 7);
+                                                      return `Sem. du ${format(d, 'dd MMM yyyy', { locale: fr })}`;
+                                                    } catch(e) { return periodStartSafe; }
+                                                  } else {
+                                                    try { return `Sem. du ${format(new Date(periodStartSafe), 'dd MMM yyyy', { locale: fr })}`; } catch(e) { return periodStartSafe; }
+                                                  }
+                                                })()
+                                            : stat.period_start}
                                         </div>
                                       </td>
                                       <td className="px-4 py-3 whitespace-nowrap">
@@ -2797,16 +2916,39 @@ export default function App() {
                                         <span className="text-emerald-600">{stat.signed || 0}</span> / <span>{stat.notSigned || 0}</span>
                                       </td>
                                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                                        <button 
-                                          onClick={() => {
-                                            setEditingManualStats(stat);
-                                            setIsManualStatsModalOpen(true);
-                                          }}
-                                          className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-100 transition-colors rounded-md border border-transparent hover:border-amber-200 inline-flex items-center gap-1 text-xs font-semibold"
-                                        >
-                                          <Edit2 className="w-3.5 h-3.5" />
-                                          Éditer
-                                        </button>
+                                        <div className="flex items-center justify-end gap-1">
+                                          <button 
+                                            onClick={() => {
+                                              setEditingManualStats(stat);
+                                              setIsManualStatsModalOpen(true);
+                                            }}
+                                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-100 transition-colors rounded-md border border-transparent hover:border-amber-200 inline-flex items-center gap-1 text-xs font-semibold"
+                                          >
+                                            <Edit2 className="w-3.5 h-3.5" />
+                                            Éditer
+                                          </button>
+                                          <button 
+                                            onClick={() => {
+                                              setConfirmDialog({
+                                                isOpen: true,
+                                                title: "Supprimer la saisie",
+                                                message: "Êtes-vous sûr de vouloir supprimer cette saisie additionnelle ? Cette action est irréversible.",
+                                                onConfirm: async () => {
+                                                  try {
+                                                    await deleteDoc(doc(db, 'manualStats', stat.id));
+                                                    setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                                                  } catch (e) {
+                                                    handleFirestoreError(e, OperationType.DELETE, 'manualStats');
+                                                  }
+                                                }
+                                              });
+                                            }}
+                                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-100 transition-colors rounded-md border border-transparent hover:border-rose-200 inline-flex items-center"
+                                            title="Supprimer"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
                                       </td>
                                     </tr>
                                   );

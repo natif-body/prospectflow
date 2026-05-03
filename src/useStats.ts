@@ -32,15 +32,32 @@ export function useStats(
     let dailyEntries = dailyLogs;
     if (startDate && endDate) {
       manualEntries = manualStats.filter(entry => {
+        const periodStartSafe = entry.period_start || '';
         if (entry.period_type === 'month') {
-          const monthStart = `${entry.period_start}-01`;
-          // If the month start is within the range, or if the range is within the month
-          const monthEnd = `${entry.period_start}-31`;
+          const monthStart = `${periodStartSafe}-01`;
+          const monthEnd = `${periodStartSafe}-31`;
           return (monthStart >= startDate && monthStart <= endDate) || 
                  (monthEnd >= startDate && monthEnd <= endDate) ||
                  (startDate >= monthStart && endDate <= monthEnd);
         }
-        return entry.period_start >= startDate && entry.period_start <= endDate;
+        if (entry.period_type === 'week') {
+          if (!periodStartSafe.includes('W')) {
+            try {
+              const d = new Date(periodStartSafe);
+              d.setDate(d.getDate() + 3);
+              const refDate = d.toISOString().split('T')[0];
+              return refDate >= startDate && refDate <= endDate;
+            } catch(e) {}
+          } else {
+            try {
+              const [year, week] = periodStartSafe.split('-W');
+              const d = new Date(parseInt(year), 0, 1 + (parseInt(week) - 1) * 7);
+              const refDate = d.toISOString().split('T')[0];
+              return refDate >= startDate && refDate <= endDate;
+            } catch(e) {}
+          }
+        }
+        return periodStartSafe >= startDate && periodStartSafe <= endDate;
       });
       dailyEntries = dailyLogs.filter(entry => 
         entry.date >= startDate && entry.date <= endDate
@@ -48,7 +65,7 @@ export function useStats(
     }
 
     manualEntries.forEach(entry => {
-      manualStatsSum.totalContacts += entry.totalContacts || 0;
+      manualStatsSum.totalContacts += entry.totalContacts ? entry.totalContacts : ((entry.contactsDigital || 0) + (entry.contactsNonDigital || 0));
       manualStatsSum.appointmentsTaken += entry.appointmentsTaken || 0;
       manualStatsSum.appointmentsProspect += entry.appointmentsProspect || 0;
       manualStatsSum.appointmentsSetter += entry.appointmentsSetter || 0;
@@ -64,7 +81,7 @@ export function useStats(
     });
 
     dailyEntries.forEach(entry => {
-      manualStatsSum.totalContacts += entry.totalContacts !== undefined ? entry.totalContacts : ((entry.digital || 0) + (entry.nonDigital || 0));
+      manualStatsSum.totalContacts += entry.totalContacts ? entry.totalContacts : ((entry.digital || 0) + (entry.nonDigital || 0));
       manualStatsSum.appointmentsTaken += entry.appointments || 0;
       manualStatsSum.appointmentsProspect += entry.appointmentsProspect || 0;
       manualStatsSum.appointmentsSetter += entry.appointmentsSetter || 0;
